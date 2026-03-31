@@ -310,7 +310,7 @@ jobs:
         run: |
           # Combine changelog + installation instructions
           cat > release-notes.md <<HEADER
-          Command-line interface for the Shoehorn Internal Developer Portal.
+          Command-line interface for the Shoehorn Intelligent Developer Platform.
 
           HEADER
 
@@ -492,7 +492,7 @@ jobs:
           mkdir -p Formula
           cat > Formula/shoehorn.rb <<RUBY
           class Shoehorn < Formula
-            desc "CLI for the Shoehorn Internal Developer Portal"
+            desc "CLI for the Shoehorn Intelligent Developer Platform"
             homepage "https://github.com/${REPO}"
             version "${VERSION}"
             license "Apache-2.0"
