@@ -668,9 +668,9 @@ func TestEntityDeduplication(t *testing.T) {
 	entities := []entity{
 		{"svc-1", "Service One"},
 		{"svc-2", "Service Two"},
-		{"svc-1", "Service One"},     // duplicate
+		{"svc-1", "Service One"}, // duplicate
 		{"svc-3", "Service Three"},
-		{"svc-2", "Service Two"},     // duplicate
+		{"svc-2", "Service Two"}, // duplicate
 	}
 
 	seen := map[string]bool{}
