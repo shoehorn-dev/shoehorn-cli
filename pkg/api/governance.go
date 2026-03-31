@@ -30,10 +30,10 @@ type GovernanceAction struct {
 
 // GovernanceDashboard holds aggregate governance metrics.
 type GovernanceDashboard struct {
-	EntityCount        int                     `json:"entity_count"`
-	ScoredEntityCount  int                     `json:"scored_entity_count"`
-	OverallHealthScore float64                 `json:"overall_health_score"`
-	OverallGrade       string                  `json:"overall_grade"`
+	EntityCount        int                      `json:"entity_count"`
+	ScoredEntityCount  int                      `json:"scored_entity_count"`
+	OverallHealthScore float64                  `json:"overall_health_score"`
+	OverallGrade       string                   `json:"overall_grade"`
 	ActionsSummary     GovernanceActionsSummary `json:"actions_summary"`
 	DocCoverage        GovernanceDocCoverage    `json:"doc_coverage"`
 }
