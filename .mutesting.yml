@@ -1,0 +1,16 @@
+# Mutation testing configuration for go-mutesting
+# Run: go-mutesting ./pkg/api/... ./pkg/config/... ./cmd/shoehorn/commands/...
+
+# Blacklist patterns that generate false-positive surviving mutants
+blacklist:
+  # TUI rendering is visual output -- mutations don't affect correctness
+  - "pkg/tui/"
+  # Test files themselves should not be mutated
+  - "_test.go"
+
+# Focus on high-value packages
+mutate:
+  - "pkg/api/"
+  - "pkg/config/"
+  - "pkg/addon/"
+  - "cmd/shoehorn/commands/"
