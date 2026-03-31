@@ -1,0 +1,64 @@
+site_name: Shoehorn CLI
+site_description: Command-line interface for the Shoehorn Intelligent Developer Platform
+site_url: https://shoehorn-dev.github.io/shoehorn-cli
+repo_url: https://github.com/shoehorn-dev/shoehorn-cli
+repo_name: shoehorn-dev/shoehorn-cli
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Authentication: authentication.md
+      - Configuration: configuration.md
+  - Commands:
+      - Catalog & Search: catalog.md
+      - Forge Workflows: forge.md
+      - Governance: governance.md
+      - Declarative Operations: declarative-ops.md
+      - Addons: addons.md
+      - Manifest Tools: manifest-tools.md
+      - CI/CD Checks: ci-cd.md
+  - Reference:
+      - Architecture: architecture.md
+      - Troubleshooting: troubleshooting.md
