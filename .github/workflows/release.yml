@@ -143,6 +143,15 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Generate release bot token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: shoehorn-dev
+          repositories: scoop-bucket
+
       - name: Determine tag and version
         id: meta
         env:
@@ -174,7 +183,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: shoehorn-dev/scoop-bucket
-          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: scoop-bucket
 
       - name: Update scoop manifest
@@ -218,8 +227,8 @@ jobs:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           cd scoop-bucket
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "shoehorn-release[bot]"
+          git config user.email "272929799+shoehorn-release[bot]@users.noreply.github.com"
           git add shoehorn.json
           git diff --cached --quiet || git commit -m "Update shoehorn to ${TAG}"
           git push origin main
@@ -232,10 +241,23 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Generate release bot token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
+
+      - name: Configure git as release bot
+        run: |
+          git config user.name "shoehorn-release[bot]"
+          git config user.email "272929799+shoehorn-release[bot]@users.noreply.github.com"
 
       - name: Determine tag and version
         id: meta
@@ -259,8 +281,6 @@ jobs:
         env:
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists"
           else
@@ -280,7 +300,7 @@ jobs:
       - name: Generate changelog from commits
         id: changelog
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           # Get the previous tag
@@ -413,14 +433,14 @@ jobs:
 
       - name: Delete existing release if present
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.meta.outputs.tag }}
         run: |
           gh release delete "${TAG}" --repo "${{ github.repository }}" --cleanup-tag --yes 2>/dev/null || true
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.meta.outputs.tag }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
@@ -449,6 +469,15 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Generate release bot token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: shoehorn-dev
+          repositories: homebrew-tap
+
       - name: Determine tag and version
         id: meta
         env:
@@ -534,7 +563,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: shoehorn-dev/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           path: tap
 
       - name: Push formula to tap repo
@@ -544,9 +573,8 @@ jobs:
           mkdir -p tap/Formula
           cp Formula/shoehorn.rb tap/Formula/shoehorn.rb
           cd tap
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "shoehorn-release[bot]"
+          git config user.email "272929799+shoehorn-release[bot]@users.noreply.github.com"
           git add Formula/shoehorn.rb
           git diff --cached --quiet || git commit -m "Update shoehorn to ${TAG}"
           git push origin main
-
