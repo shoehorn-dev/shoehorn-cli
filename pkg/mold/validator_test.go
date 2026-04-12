@@ -238,6 +238,28 @@ func TestValidateMold_InvalidActionProvider(t *testing.T) {
 	}
 }
 
+func TestValidateMold_KnownTemplateApplyActionDoesNotWarn(t *testing.T) {
+	def := &MoldDefinition{
+		Version:  "1.0.0",
+		Metadata: WorkflowMetadata{Name: "test", DisplayName: "Test", Description: "Test", Category: "testing"},
+		Steps: []WorkflowStep{{
+			ID:     "apply-template",
+			Name:   "Apply template",
+			Action: "github.template.apply",
+		}},
+	}
+
+	result := ValidateMold(def)
+	if !result.Valid {
+		t.Fatalf("expected valid mold, got errors: %v", result.Errors)
+	}
+	for _, warning := range result.Warnings {
+		if strings.Contains(warning.Message, "unknown action") {
+			t.Fatalf("expected no unknown-action warning, got: %v", result.Warnings)
+		}
+	}
+}
+
 func TestValidateMold_InvalidAdapter(t *testing.T) {
 	def := &MoldDefinition{
 		Version:  "1.0.0",
