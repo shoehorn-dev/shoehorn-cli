@@ -28,8 +28,8 @@ var validAdapters = map[string]bool{
 var knownActions = map[string]bool{
 	"github.repo.create":      true,
 	"github.repo.update":      true,
-	"github.repo.delete":      true,
 	"github.file.create":      true,
+	"github.template.apply":   true,
 	"github.topics.set":       true,
 	"github.pr.create":        true,
 	"github.team.add":         true,
