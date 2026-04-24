@@ -12,10 +12,14 @@ import (
 
 // ─── /me ────────────────────────────────────────────────────────────────────
 
-// MeResponse represents the current user's full profile
+// MeResponse represents the current user's full profile.
+// Username is a display handle — for PAT users without a real display_name
+// it falls back to the local-part of the email so `whoami` panels don't
+// render "foo@bar.com" twice (once as title, once in the Email row).
 type MeResponse struct {
 	ID       string   `json:"id"`
 	Email    string   `json:"email"`
+	Username string   `json:"username"`
 	Name     string   `json:"name"`
 	TenantID string   `json:"tenant_id"`
 	Roles    []string `json:"roles"`
@@ -28,7 +32,7 @@ type meAPIResponse struct {
 	ID        string   `json:"id"`
 	Email     string   `json:"email"`
 	Name      string   `json:"name"`
-	User      string   `json:"user"` // API returns username in "user" field
+	User      string   `json:"username"` // API field is "username"
 	FirstName string   `json:"firstName"`
 	LastName  string   `json:"lastName"`
 	Tenant    string   `json:"tenant"`
@@ -43,27 +47,51 @@ func (c *Client) GetMe(ctx context.Context) (*MeResponse, error) {
 	if err := c.Get(ctx, "/api/v1/me", &raw); err != nil {
 		return nil, fmt.Errorf("get me: %w", err)
 	}
-	name := raw.Name
+
+	email := raw.Email
+	// If the API returned a non-email ID in the email slot, clear it so
+	// callers don't display meaningless values to the user. Belt-and-
+	// suspenders against the class of bug where the server falls back to
+	// a UUID for PAT-authenticated requests.
+	if email != "" && !strings.Contains(email, "@") {
+		email = ""
+	}
+
+	// `name` is the panel title / display name. Prefer a real first+last,
+	// then server-supplied name, then username. If the resulting value
+	// equals the email, clear it — rendering "foo@bar.com" as a panel
+	// title above an Email row that also says "foo@bar.com" just looks
+	// like a UI bug.
+	name := strings.TrimSpace(raw.FirstName + " " + raw.LastName)
 	if name == "" {
-		name = strings.TrimSpace(raw.FirstName + " " + raw.LastName)
+		name = raw.Name
 	}
 	if name == "" {
 		name = raw.User
 	}
-	email := raw.Email
-	// If the API returned a numeric ID instead of a real email, clear it
-	// so callers don't display meaningless IDs to the user.
-	if email != "" && !strings.Contains(email, "@") {
-		email = ""
-	}
 	if name != "" && !strings.Contains(name, " ") && !strings.Contains(name, "@") && name == raw.ID {
-		// Name is just the numeric ID — not useful
+		// Name is just the ID — not useful
 		name = ""
+	}
+	if name == email {
+		name = ""
+	}
+
+	// Username fallback: server field → email local-part. PAT-created
+	// users often lack a distinct display_name, so the server returns
+	// their email as "username" too; splitting on @ gives a readable
+	// short handle like "hello" rather than repeating the email.
+	username := raw.User
+	if username == "" || username == email {
+		if at := strings.Index(email, "@"); at > 0 {
+			username = email[:at]
+		}
 	}
 
 	return &MeResponse{
 		ID:       raw.ID,
 		Email:    email,
+		Username: username,
 		Name:     name,
 		TenantID: raw.Tenant,
 		Roles:    raw.Roles,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/shoehorn-dev/shoehorn-cli/pkg/api"
+	"github.com/shoehorn-dev/shoehorn-cli/pkg/config"
 	"github.com/shoehorn-dev/shoehorn-cli/pkg/tui"
 	"github.com/shoehorn-dev/shoehorn-cli/pkg/ui"
 	"github.com/spf13/cobra"
@@ -44,9 +45,26 @@ func runWhoami(cmd *cobra.Command, args []string) error {
 		return ui.RenderYAML(me)
 	}
 
-	panel := tui.RenderDetail(me.Name, []tui.DetailSection{
+	// Panel title carries context — which server and which auth kind —
+	// rather than mirroring a body field. Knowing "am I pointed at prod
+	// or staging" is the high-value question at a glance; the actual
+	// identity is in the rows below. Matches the pattern `gh auth status`
+	// uses ("Logged in to github.com as …").
+	title := "Signed in"
+	if cfg, err := config.Load(); err == nil {
+		if profile, perr := cfg.GetCurrentProfile(); perr == nil && profile != nil && profile.Server != "" {
+			authKind := "session"
+			if cfg.IsPATAuth() {
+				authKind = "PAT"
+			}
+			title = fmt.Sprintf("Signed in to %s (%s)", profile.Server, authKind)
+		}
+	}
+
+	panel := tui.RenderDetail(title, []tui.DetailSection{
 		{
 			Fields: []tui.Field{
+				{Label: "Username", Value: me.Username},
 				{Label: "Email", Value: me.Email},
 				{Label: "Tenant", Value: me.TenantID},
 				{Label: "User ID", Value: me.ID},
