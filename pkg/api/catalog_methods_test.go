@@ -63,9 +63,9 @@ func TestGetMe_Success_FullProfile(t *testing.T) {
 func TestGetMe_NumericEmail_Cleared(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"id":    "12345",
-			"email": "12345", // Not a real email
-			"user":  "jsmith",
+			"id":       "12345",
+			"email":    "12345", // Not a real email
+			"username": "jsmith",
 		})
 	}))
 	defer ts.Close()
@@ -85,8 +85,8 @@ func TestGetMe_NumericEmail_Cleared(t *testing.T) {
 func TestGetMe_NameFallsBackToUser(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"id":   "u-1",
-			"user": "jdoe",
+			"id":       "u-1",
+			"username": "jdoe",
 		})
 	}))
 	defer ts.Close()
