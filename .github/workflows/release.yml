@@ -147,7 +147,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v2
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: shoehorn-dev
           repositories: scoop-bucket
@@ -222,29 +222,26 @@ jobs:
           echo "Generated scoop manifest:"
           cat scoop-bucket/shoehorn.json
 
-      - name: Open PR and enable auto-merge
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          path: scoop-bucket
+          branch: release/${{ steps.meta.outputs.tag }}
+          base: main
+          title: Update shoehorn to ${{ steps.meta.outputs.tag }}
+          commit-message: Update shoehorn to ${{ steps.meta.outputs.tag }}
+          body: Automated manifest update for ${{ steps.meta.outputs.tag }}.
+          delete-branch: true
+          sign-commits: true
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          TAG: ${{ steps.meta.outputs.tag }}
-        run: |
-          cd scoop-bucket
-          BRANCH="release/${TAG}"
-          git config user.name "shoehorn-release[bot]"
-          git config user.email "272929799+shoehorn-release[bot]@users.noreply.github.com"
-          git checkout -b "${BRANCH}"
-          git add shoehorn.json
-          if git diff --cached --quiet; then
-            echo "No manifest changes to publish"
-            exit 0
-          fi
-          git commit -m "Update shoehorn to ${TAG}"
-          git push --force origin "${BRANCH}"
-          gh pr create \
-            --title "Update shoehorn to ${TAG}" \
-            --body "Automated manifest update for ${TAG}." \
-            --base main \
-            --head "${BRANCH}"
-          gh pr merge "${BRANCH}" --auto --squash --delete-branch
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+        run: gh pr merge "$PR" --repo shoehorn-dev/scoop-bucket --auto --squash
 
   # ─── GitHub Release ─────────────────────────────────────────────────────────
   release:
@@ -258,7 +255,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v2
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout code
@@ -486,7 +483,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v2
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: shoehorn-dev
           repositories: homebrew-tap
@@ -579,28 +576,28 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           path: tap
 
-      - name: Open PR and enable auto-merge
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          TAG: ${{ steps.meta.outputs.tag }}
+      - name: Stage formula in tap checkout
         run: |
           mkdir -p tap/Formula
           cp Formula/shoehorn.rb tap/Formula/shoehorn.rb
-          cd tap
-          BRANCH="release/${TAG}"
-          git config user.name "shoehorn-release[bot]"
-          git config user.email "272929799+shoehorn-release[bot]@users.noreply.github.com"
-          git checkout -b "${BRANCH}"
-          git add Formula/shoehorn.rb
-          if git diff --cached --quiet; then
-            echo "No formula changes to publish"
-            exit 0
-          fi
-          git commit -m "Update shoehorn to ${TAG}"
-          git push --force origin "${BRANCH}"
-          gh pr create \
-            --title "Update shoehorn to ${TAG}" \
-            --body "Automated formula update for ${TAG}." \
-            --base main \
-            --head "${BRANCH}"
-          gh pr merge "${BRANCH}" --auto --squash --delete-branch
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          path: tap
+          branch: release/${{ steps.meta.outputs.tag }}
+          base: main
+          title: Update shoehorn to ${{ steps.meta.outputs.tag }}
+          commit-message: Update shoehorn to ${{ steps.meta.outputs.tag }}
+          body: Automated formula update for ${{ steps.meta.outputs.tag }}.
+          delete-branch: true
+          sign-commits: true
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+        run: gh pr merge "$PR" --repo shoehorn-dev/homebrew-tap --auto --squash
