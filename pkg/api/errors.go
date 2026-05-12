@@ -30,6 +30,9 @@ var (
 	ErrRateLimit = errors.New("rate limited")
 	// ErrServerError indicates an internal server failure (HTTP 5xx).
 	ErrServerError = errors.New("server error")
+	// ErrBetaReadOnly indicates the tenant's Beta period has ended and writes
+	// are paused for the 30-day grace window (HTTP 423 BETA_ENDED_READ_ONLY).
+	ErrBetaReadOnly = errors.New("Beta ended. Writes paused. Activate a Standard license to resume, or stay on Free")
 )
 
 // APIError represents a structured error from the Shoehorn API.
@@ -51,6 +54,12 @@ func (e *APIError) Error() string {
 // Unwrap returns the appropriate sentinel error based on status code,
 // enabling errors.Is(err, api.ErrNotFound) to work.
 func (e *APIError) Unwrap() error {
+	// Code-string branches first — the platform's machine-readable error code
+	// is authoritative when present and may map to a sentinel that doesn't
+	// follow the default HTTP-status convention.
+	if e.Code == "BETA_ENDED_READ_ONLY" {
+		return ErrBetaReadOnly
+	}
 	switch {
 	case e.StatusCode == 401:
 		return ErrNotAuthenticated
@@ -62,6 +71,8 @@ func (e *APIError) Unwrap() error {
 		return ErrValidation
 	case e.StatusCode == 409:
 		return ErrConflict
+	case e.StatusCode == 423:
+		return ErrBetaReadOnly
 	case e.StatusCode == 429:
 		return ErrRateLimit
 	case e.StatusCode == 408 || e.StatusCode == 504:
