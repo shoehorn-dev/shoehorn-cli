@@ -40,6 +40,7 @@ func TestGetCmd_HasExpectedSubcommands(t *testing.T) {
 		"molds", "mold",
 		"runs", "run",
 		"gitops",
+		"resources",
 		"scorecard",
 		"k8s",
 	}
