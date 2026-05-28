@@ -20,6 +20,7 @@ var (
 	resourcesStatus    string
 	resourcesSearch    string
 	resourcesHasGitOps bool
+	resourcesSignal    string
 	resourcesCursor    string
 	resourcesLimit     int
 )
@@ -45,6 +46,7 @@ func init() {
 	resourcesCmd.Flags().StringVar(&resourcesStatus, "status", "", "filter by status (Healthy, Degraded, Failing, Pending)")
 	resourcesCmd.Flags().StringVar(&resourcesSearch, "search", "", "filter by name")
 	resourcesCmd.Flags().BoolVar(&resourcesHasGitOps, "has-gitops", false, "show only resources with a GitOps source")
+	resourcesCmd.Flags().StringVar(&resourcesSignal, "signal", "", "filter by signal (no-netpolicy)")
 	resourcesCmd.Flags().StringVar(&resourcesCursor, "cursor", "", "page cursor from a prior result's next cursor")
 	resourcesCmd.Flags().IntVar(&resourcesLimit, "limit", 0, "max resources per page (0 uses the server default)")
 
@@ -71,6 +73,7 @@ func runGetResourcesList(cmd *cobra.Command) error {
 		Status:    resourcesStatus,
 		Search:    resourcesSearch,
 		HasGitOps: resourcesHasGitOps,
+		Signal:    resourcesSignal,
 		Cursor:    resourcesCursor,
 		Limit:     resourcesLimit,
 	}

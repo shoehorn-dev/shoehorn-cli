@@ -106,6 +106,7 @@ type ListOperationsResourcesOpts struct {
 	Status    string
 	Search    string
 	HasGitOps bool
+	Signal    string // actionability signal filter (e.g. "no-netpolicy")
 	Cursor    string
 	Limit     int
 }
@@ -158,6 +159,9 @@ func (c *Client) ListOperationsResources(ctx context.Context, opts ListOperation
 	}
 	if opts.HasGitOps {
 		q.Set("has_gitops", "true")
+	}
+	if opts.Signal != "" {
+		q.Set("signal", opts.Signal)
 	}
 	if opts.Cursor != "" {
 		q.Set("cursor", opts.Cursor)
