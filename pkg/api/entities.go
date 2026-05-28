@@ -159,9 +159,10 @@ type ChangelogEntry struct {
 
 // ListEntitiesOpts holds optional filters for listing entities
 type ListEntitiesOpts struct {
-	Type   string
-	Search string
-	Owner  string
+	Type             string
+	Search           string
+	Owner            string
+	IncludeEndOfLife bool
 }
 
 // entityOwnerRef matches the API owner array element: [{"id":"team-slug","type":"team"}]
@@ -225,6 +226,9 @@ func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*En
 	}
 	if opts.Owner != "" {
 		q.Set("owner", opts.Owner)
+	}
+	if opts.IncludeEndOfLife {
+		q.Set("includeEndOfLife", "true")
 	}
 	q.Set("limit", "100")
 
