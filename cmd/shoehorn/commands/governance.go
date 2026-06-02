@@ -57,6 +57,14 @@ var actionsDeleteCmd = &cobra.Command{
 	RunE:  runActionsDelete,
 }
 
+var actionsBulkCmd = &cobra.Command{
+	Use:   "bulk <id> [<id>...]",
+	Short: "Update the status of many actions at once",
+	Long:  `Transition several governance actions to a single status in one request.`,
+	Args:  cobra.MinimumNArgs(1),
+	RunE:  runActionsBulk,
+}
+
 var dashboardCmd = &cobra.Command{
 	Use:   "dashboard",
 	Short: "Show governance dashboard metrics",
@@ -83,6 +91,19 @@ var (
 	govUpdateResolutionNote string
 )
 
+// actions list flags
+var (
+	govListStatus     string
+	govListPriority   string
+	govListEntityID   string
+	govListAssignedTo string
+	govListOverdue    bool
+	govListClosed     bool
+)
+
+// actions bulk flags
+var govBulkStatus string
+
 func init() {
 	// actions create flags
 	actionsCreateCmd.Flags().StringVar(&govCreateEntityID, "entity-id", "", "entity ID (required)")
@@ -97,6 +118,18 @@ func init() {
 	_ = actionsCreateCmd.MarkFlagRequired("priority")
 	_ = actionsCreateCmd.MarkFlagRequired("source-type")
 
+	// actions list filters
+	actionsListCmd.Flags().StringVar(&govListStatus, "status", "", "filter by status: open, in_progress, resolved, dismissed, wont_fix")
+	actionsListCmd.Flags().StringVar(&govListPriority, "priority", "", "filter by priority: critical, high, medium, low")
+	actionsListCmd.Flags().StringVar(&govListEntityID, "entity-id", "", "filter by entity ID")
+	actionsListCmd.Flags().StringVar(&govListAssignedTo, "assigned-to", "", "filter by assignee (user or team)")
+	actionsListCmd.Flags().BoolVar(&govListOverdue, "overdue", false, "only overdue actions")
+	actionsListCmd.Flags().BoolVar(&govListClosed, "closed", false, "only closed actions (resolved, dismissed, wont_fix)")
+
+	// actions bulk flags
+	actionsBulkCmd.Flags().StringVar(&govBulkStatus, "status", "", "target status: open, in_progress, resolved, dismissed, wont_fix (required)")
+	_ = actionsBulkCmd.MarkFlagRequired("status")
+
 	// actions update flags
 	actionsUpdateCmd.Flags().StringVar(&govUpdateStatus, "status", "", "new status: open, in_progress, resolved, dismissed")
 	actionsUpdateCmd.Flags().StringVar(&govUpdatePriority, "priority", "", "new priority: critical, high, medium, low")
@@ -110,6 +143,7 @@ func init() {
 	actionsCmd.AddCommand(actionsCreateCmd)
 	actionsCmd.AddCommand(actionsUpdateCmd)
 	actionsCmd.AddCommand(actionsDeleteCmd)
+	actionsCmd.AddCommand(actionsBulkCmd)
 
 	governanceCmd.AddCommand(actionsCmd)
 	governanceCmd.AddCommand(dashboardCmd)
@@ -132,7 +166,14 @@ func runActionsList(cmd *cobra.Command, args []string) error {
 	}
 
 	result, spinErr := tui.RunSpinner("Loading governance actions...", func() (any, error) {
-		actions, total, err := client.ListGovernanceActions(ctx, api.ListGovernanceActionsOpts{})
+		actions, total, err := client.ListGovernanceActions(ctx, api.ListGovernanceActionsOpts{
+			Status:     govListStatus,
+			Priority:   govListPriority,
+			EntityID:   govListEntityID,
+			AssignedTo: govListAssignedTo,
+			Overdue:    govListOverdue,
+			Closed:     govListClosed,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -390,6 +431,35 @@ func runActionsDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Governance action %q deleted.\n", actionID)
+	return nil
+}
+
+// ─── Actions Bulk ───────────────────────────────────────────────────────────
+
+func runActionsBulk(cmd *cobra.Command, args []string) error {
+	client, err := api.NewClientFromConfig(api.WithLogger(Logger))
+	if err != nil {
+		return err
+	}
+	ctx := cmd.Context()
+
+	result, spinErr := tui.RunSpinner(fmt.Sprintf("Updating %d actions...", len(args)), func() (any, error) {
+		return client.BulkUpdateGovernanceActions(ctx, args, govBulkStatus)
+	})
+	if spinErr != nil {
+		return fmt.Errorf("bulk update governance actions: %w", spinErr)
+	}
+
+	res := result.(*api.BulkUpdateGovernanceActionsResult)
+
+	mode := ui.DetectMode(interactive, noInteractive, outputFormat)
+	if mode == ui.ModeJSON {
+		return ui.RenderJSON(res)
+	}
+	fmt.Printf("Updated %d of %d actions to %q.\n", res.Updated, res.Requested, govBulkStatus)
+	if res.Updated < res.Requested {
+		fmt.Println("Some actions were skipped (already in a final state, or not found).")
+	}
 	return nil
 }
 

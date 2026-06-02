@@ -59,7 +59,15 @@ type ListGovernanceActionsOpts struct {
 	Priority   string
 	EntityID   string
 	SourceType string
+	AssignedTo string
 	Overdue    bool
+	Closed     bool
+}
+
+// BulkUpdateGovernanceActionsResult is the response from a bulk status update.
+type BulkUpdateGovernanceActionsResult struct {
+	Requested int `json:"requested"`
+	Updated   int `json:"updated"`
 }
 
 // CreateGovernanceActionRequest is the body for POST /governance/actions.
@@ -102,8 +110,14 @@ func (c *Client) ListGovernanceActions(ctx context.Context, opts ListGovernanceA
 	if opts.SourceType != "" {
 		q.Set("source_type", opts.SourceType)
 	}
+	if opts.AssignedTo != "" {
+		q.Set("assigned_to", opts.AssignedTo)
+	}
 	if opts.Overdue {
 		q.Set("overdue", "true")
+	}
+	if opts.Closed {
+		q.Set("closed", "true")
 	}
 
 	path := "/api/v1/governance/actions"
@@ -155,6 +169,18 @@ func (c *Client) UpdateGovernanceAction(ctx context.Context, id string, req Upda
 		return fmt.Errorf("update governance action %s: %w", id, err)
 	}
 	return nil
+}
+
+// BulkUpdateGovernanceActions transitions many actions to a single status in one
+// request. IDs in another tenant or a non-transitionable state are skipped server
+// side; the result reports how many actually changed.
+func (c *Client) BulkUpdateGovernanceActions(ctx context.Context, ids []string, status string) (*BulkUpdateGovernanceActionsResult, error) {
+	body := map[string]any{"ids": ids, "status": status}
+	var resp BulkUpdateGovernanceActionsResult
+	if err := c.Post(ctx, "/api/v1/governance/actions/bulk", body, &resp); err != nil {
+		return nil, fmt.Errorf("bulk update governance actions: %w", err)
+	}
+	return &resp, nil
 }
 
 // DeleteGovernanceAction removes a governance action by ID.
