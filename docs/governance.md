@@ -7,7 +7,10 @@ List governance action items with optional filters.
 ```bash
 shoehorn governance actions list
 shoehorn governance actions list --output json
+shoehorn governance actions list --team platform-team
 ```
+
+Filters: `--status`, `--priority`, `--entity-id`, `--assigned-to`, `--team`, `--overdue`, `--closed`. `--team` keeps only actions on entities owned by that team (comma-separated for several).
 
 ## `governance actions get`
 

@@ -60,6 +60,7 @@ type ListGovernanceActionsOpts struct {
 	EntityID   string
 	SourceType string
 	AssignedTo string
+	Team       string
 	Overdue    bool
 	Closed     bool
 }
@@ -112,6 +113,9 @@ func (c *Client) ListGovernanceActions(ctx context.Context, opts ListGovernanceA
 	}
 	if opts.AssignedTo != "" {
 		q.Set("assigned_to", opts.AssignedTo)
+	}
+	if opts.Team != "" {
+		q.Set("team", opts.Team)
 	}
 	if opts.Overdue {
 		q.Set("overdue", "true")

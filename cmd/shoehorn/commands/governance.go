@@ -97,6 +97,7 @@ var (
 	govListPriority   string
 	govListEntityID   string
 	govListAssignedTo string
+	govListTeam       string
 	govListOverdue    bool
 	govListClosed     bool
 )
@@ -123,6 +124,7 @@ func init() {
 	actionsListCmd.Flags().StringVar(&govListPriority, "priority", "", "filter by priority: critical, high, medium, low")
 	actionsListCmd.Flags().StringVar(&govListEntityID, "entity-id", "", "filter by entity ID")
 	actionsListCmd.Flags().StringVar(&govListAssignedTo, "assigned-to", "", "filter by assignee (user or team)")
+	actionsListCmd.Flags().StringVar(&govListTeam, "team", "", "filter to actions on entities owned by this team (comma-separated for several)")
 	actionsListCmd.Flags().BoolVar(&govListOverdue, "overdue", false, "only overdue actions")
 	actionsListCmd.Flags().BoolVar(&govListClosed, "closed", false, "only closed actions (resolved, dismissed, wont_fix)")
 
@@ -171,6 +173,7 @@ func runActionsList(cmd *cobra.Command, args []string) error {
 			Priority:   govListPriority,
 			EntityID:   govListEntityID,
 			AssignedTo: govListAssignedTo,
+			Team:       govListTeam,
 			Overdue:    govListOverdue,
 			Closed:     govListClosed,
 		})
