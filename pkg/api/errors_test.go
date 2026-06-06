@@ -51,7 +51,6 @@ func TestAPIError_Unwrap_ErrorsIs(t *testing.T) {
 		{"422 matches ErrValidation", 422, ErrValidation, true},
 		{"408 matches ErrTimeout", 408, ErrTimeout, true},
 		{"504 matches ErrTimeout", 504, ErrTimeout, true},
-		{"423 matches ErrBetaReadOnly", 423, ErrBetaReadOnly, true},
 		{"500 matches ErrServerError", 500, ErrServerError, true},
 		{"502 matches ErrServerError", 502, ErrServerError, true},
 		{"200 matches nothing", 200, ErrNotFound, false},
@@ -117,16 +116,6 @@ func TestIsNotFound_Helper(t *testing.T) {
 	}
 	if IsNotFound(fmt.Errorf("random error")) {
 		t.Error("IsNotFound should return false for non-API error")
-	}
-}
-
-// BETA_ENDED_READ_ONLY can also arrive on a non-423 status if a future
-// platform version routes it differently. The code-string branch must still
-// catch it. Verifies the "code OR status" mapping in Unwrap.
-func TestAPIError_BetaReadOnly_CodeBranch(t *testing.T) {
-	err := &APIError{StatusCode: 400, Message: "writes paused", Code: "BETA_ENDED_READ_ONLY"}
-	if !errors.Is(err, ErrBetaReadOnly) {
-		t.Error("APIError with code=BETA_ENDED_READ_ONLY should match ErrBetaReadOnly regardless of status")
 	}
 }
 

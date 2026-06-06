@@ -86,6 +86,7 @@ func TestListOperationsResources_FilterPassthrough(t *testing.T) {
 		Status:    "Degraded",
 		Search:    "checkout",
 		HasGitOps: true,
+		Signal:    "no-netpolicy",
 		Cursor:    "cur_xyz",
 		Limit:     25,
 	})
@@ -104,6 +105,7 @@ func TestListOperationsResources_FilterPassthrough(t *testing.T) {
 		"status":     "Degraded",
 		"search":     "checkout",
 		"has_gitops": "true",
+		"signal":     "no-netpolicy",
 		"cursor":     "cur_xyz",
 		"limit":      "25",
 	}
