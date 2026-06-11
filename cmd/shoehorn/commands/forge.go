@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -61,11 +63,17 @@ Optionally pass input values as JSON or key=value pairs:
 var executeCmd = &cobra.Command{
 	Use:   "execute <mold-slug>",
 	Short: "Execute a mold workflow",
-	Long: `Fetch a mold, determine the action, and start a run in one step.
+	Long: `Fetch a mold, determine the action, start a run, and watch it to completion.
+
+When the run completes, links to what was created (like a new repository) are
+shown and can be opened in your browser. Use --no-watch to start the run and
+exit immediately, or --open to open the created resource without being asked.
 
 Examples:
   shoehorn forge execute my-mold --input name=my-repo --input owner=acme
   shoehorn forge execute my-mold --action scaffold --inputs '{"name":"my-repo"}'
+  shoehorn forge execute my-mold --input name=my-repo --open
+  shoehorn forge execute my-mold --input name=my-repo --no-watch
   shoehorn forge execute my-mold --dry-run --input name=test`,
 	Args: cobra.ExactArgs(1),
 	RunE: runExecute,
@@ -106,6 +114,9 @@ var (
 	execInputKVPairs []string
 	execActionFlag   string
 	execDryRunFlag   bool
+	execNoWatchFlag  bool
+	execOpenFlag     bool
+	execIntervalFlag int
 )
 
 func init() {
@@ -120,6 +131,9 @@ func init() {
 	executeCmd.Flags().StringArrayVar(&execInputKVPairs, "input", nil, "Input as key=value (repeatable)")
 	executeCmd.Flags().StringVar(&execActionFlag, "action", "", "Action name (auto-selects primary if omitted)")
 	executeCmd.Flags().BoolVar(&execDryRunFlag, "dry-run", false, "Validate without executing")
+	executeCmd.Flags().BoolVar(&execNoWatchFlag, "no-watch", false, "Start the run and exit without watching it")
+	executeCmd.Flags().BoolVar(&execOpenFlag, "open", false, "Open the created resource in your browser when the run completes")
+	executeCmd.Flags().IntVar(&execIntervalFlag, "interval", 2, "polling interval in seconds while watching")
 
 	runCmd.AddCommand(runListCmd)
 	runCmd.AddCommand(runGetCmd)
@@ -263,15 +277,17 @@ func runExecute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("missing required inputs: %s\nUse --input key=value to provide them", strings.Join(missing, ", "))
 	}
 
-	// 7. Handle JSON/YAML output
+	// 7. JSON/YAML mode: create the run and emit it for scripting (no watch)
 	mode := ui.DetectMode(interactive, noInteractive, outputFormat)
-	if mode == ui.ModeJSON {
-		return ui.RenderJSON(map[string]any{
-			"mold_slug": moldSlug,
-			"action":    action,
-			"inputs":    inputs,
-			"dry_run":   execDryRunFlag,
-		})
+	if mode == ui.ModeJSON || mode == ui.ModeYAML {
+		run, runErr := client.CreateRun(ctx, moldSlug, action, inputs, execDryRunFlag)
+		if runErr != nil {
+			return fmt.Errorf("execution failed: %w", runErr)
+		}
+		if mode == ui.ModeYAML {
+			return ui.RenderYAML(run)
+		}
+		return ui.RenderJSON(run)
 	}
 
 	// 8. Create run
@@ -297,8 +313,47 @@ func runExecute(cmd *cobra.Command, args []string) error {
 		tui.LabelStyle.Render("Status"), tui.StatusColor(run.Status).Render(run.Status),
 	)
 	fmt.Println(tui.SuccessBox(prefix, body))
-	if !execDryRunFlag {
-		fmt.Printf("\nCheck progress: shoehorn forge run get %s\n", run.ID)
+
+	if execDryRunFlag {
+		return nil
+	}
+	if execNoWatchFlag {
+		fmt.Printf("\nCheck progress: shoehorn forge run watch %s\n", run.ID)
+		return nil
+	}
+
+	// 9. Watch until the run finishes
+	interval := time.Duration(execIntervalFlag) * time.Second
+	if interval < time.Second {
+		interval = time.Second
+	}
+	fmt.Fprintf(os.Stderr, "\nWatching run %s (Ctrl+C to stop)...\n", run.ID)
+
+	final, watchErr := watchUntilTerminal(ctx, client, run.ID, interval, func(status string) {
+		fmt.Fprintf(os.Stderr, "  %s\n", formatStatus(status))
+		if status == "pending_approval" {
+			fmt.Fprintln(os.Stderr, "  Run is waiting for approval. Approvers decide under Forge > Approvals in the portal.")
+		}
+	})
+	if watchErr != nil {
+		if errors.Is(watchErr, context.Canceled) {
+			status := ""
+			if final != nil {
+				status = final.Status
+			}
+			fmt.Fprintf(os.Stderr, "\nStopped watching (run is still %s). Resume with: shoehorn forge run watch %s\n", status, run.ID)
+			return nil
+		}
+		return watchErr
+	}
+
+	fmt.Println(tui.RenderDetail("Run Complete", runResultSections(final)))
+
+	if final.Status == "completed" {
+		offerOpenLinks(extractOutputLinks(final.Outputs), execOpenFlag)
+	}
+	if final.Status == "failed" || final.Status == "cancelled" {
+		return fmt.Errorf("run %s: %s", final.ID, final.Status)
 	}
 	return nil
 }
@@ -698,71 +753,47 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Watching run %s (every %ds, Ctrl+C to stop)...\n", runID, watchInterval)
 
-	var lastStatus string
-	for {
-		run, err := client.GetRun(ctx, runID)
-		if err != nil {
-			return fmt.Errorf("get run: %w", err)
-		}
-
-		if run.Status != lastStatus {
-			lastStatus = run.Status
-			fmt.Fprintf(os.Stderr, "  %s %s\n", formatStatus(run.Status), run.Status)
-		}
-
-		if isTerminalStatus(run.Status) {
-			// Final output
-			if mode == ui.ModeJSON {
-				return ui.RenderJSON(run)
+	run, err := watchUntilTerminal(ctx, client, runID, interval, func(status string) {
+		fmt.Fprintf(os.Stderr, "  %s\n", formatStatus(status))
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			status := ""
+			if run != nil {
+				status = run.Status
 			}
-			if mode == ui.ModeYAML {
-				return ui.RenderYAML(run)
-			}
-
-			sections := []tui.DetailSection{
-				{
-					Fields: []tui.Field{
-						{Label: "Run ID", Value: run.ID},
-						{Label: "Mold", Value: run.MoldSlug},
-						{Label: "Action", Value: run.Action},
-						{Label: "Status", Value: tui.StatusColor(run.Status).Render(run.Status)},
-					},
-				},
-			}
-			if run.Error != "" {
-				sections[0].Fields = append(sections[0].Fields,
-					tui.Field{Label: "Error", Value: tui.ErrorStyle.Render(run.Error)})
-			}
-			fmt.Println(tui.RenderDetail("Run Complete", sections))
-
-			if run.Status == "failed" || run.Status == "cancelled" {
-				return fmt.Errorf("run %s: %s", runID, run.Status)
-			}
+			fmt.Fprintf(os.Stderr, "\nStopped watching (run is still %s)\n", status)
 			return nil
 		}
-
-		// Wait for next poll or context cancellation
-		timer := time.NewTimer(interval)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			timer.Stop()
-			fmt.Fprintf(os.Stderr, "\nStopped watching (run is still %s)\n", lastStatus)
-			return nil
-		}
+		return err
 	}
+
+	if mode == ui.ModeJSON {
+		return ui.RenderJSON(run)
+	}
+	if mode == ui.ModeYAML {
+		return ui.RenderYAML(run)
+	}
+
+	fmt.Println(tui.RenderDetail("Run Complete", runResultSections(run)))
+
+	if run.Status == "failed" || run.Status == "cancelled" {
+		return fmt.Errorf("run %s: %s", runID, run.Status)
+	}
+	return nil
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 func formatStatus(status string) string {
 	statusIcons := map[string]string{
-		"pending":     "? ",
-		"executing":   "> ",
-		"completed":   "v ",
-		"failed":      "x ",
-		"cancelled":   "o ",
-		"rolled_back": "< ",
+		"pending":          "? ",
+		"pending_approval": "? ",
+		"executing":        "> ",
+		"completed":        "v ",
+		"failed":           "x ",
+		"cancelled":        "o ",
+		"rolled_back":      "< ",
 	}
 
 	icon, ok := statusIcons[status]
