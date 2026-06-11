@@ -32,6 +32,20 @@ func TestValidateURL_RejectsUnsafeSchemes(t *testing.T) {
 	}
 }
 
+func TestValidateURL_RejectsUserinfoAndUnencodedCharacters(t *testing.T) {
+	for _, u := range []string{
+		"https://github.com@evil.example/acme",
+		"https://user:pass@github.com/acme",
+		"https://example.com/a b",
+		`https://example.com/a"b`,
+		`https://example.com/a\b`,
+	} {
+		if err := validateURL(u); err == nil {
+			t.Errorf("validateURL(%q) = nil, want error (userinfo / unencoded chars)", u)
+		}
+	}
+}
+
 func TestCommandArgs_PerPlatform(t *testing.T) {
 	url := "https://github.com/acme/svc"
 

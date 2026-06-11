@@ -69,6 +69,9 @@ When the run completes, links to what was created (like a new repository) are
 shown and can be opened in your browser. Use --no-watch to start the run and
 exit immediately, or --open to open the created resource without being asked.
 
+Note: with --output json the run IS created (and executed) and printed as
+JSON without watching. Use --dry-run to preview without creating anything.
+
 Examples:
   shoehorn forge execute my-mold --input name=my-repo --input owner=acme
   shoehorn forge execute my-mold --action scaffold --inputs '{"name":"my-repo"}'
@@ -337,7 +340,7 @@ func runExecute(cmd *cobra.Command, args []string) error {
 	})
 	if watchErr != nil {
 		if errors.Is(watchErr, context.Canceled) {
-			status := ""
+			status := "status unknown"
 			if final != nil {
 				status = final.Status
 			}
@@ -758,7 +761,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			status := ""
+			status := "status unknown"
 			if run != nil {
 				status = run.Status
 			}

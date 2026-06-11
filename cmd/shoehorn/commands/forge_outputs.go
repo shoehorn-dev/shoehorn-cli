@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -51,13 +52,21 @@ func extractOutputLinks(outputs map[string]any) []OutputLink {
 
 func collectLinks(m map[string]any, out *[]OutputLink) {
 	for key, val := range m {
-		switch v := val.(type) {
-		case string:
-			if isHTTPURL(v) {
-				*out = append(*out, OutputLink{Key: key, URL: v})
-			}
-		case map[string]any:
-			collectLinks(v, out)
+		collectLinkValue(key, val, out)
+	}
+}
+
+func collectLinkValue(key string, val any, out *[]OutputLink) {
+	switch v := val.(type) {
+	case string:
+		if isHTTPURL(v) {
+			*out = append(*out, OutputLink{Key: key, URL: v})
+		}
+	case map[string]any:
+		collectLinks(v, out)
+	case []any:
+		for _, item := range v {
+			collectLinkValue(key, item, out)
 		}
 	}
 }
@@ -76,7 +85,29 @@ func isHTTPURL(s string) bool {
 		return false
 	}
 	u, err := url.Parse(s)
-	return err == nil && u.Host != ""
+	// Userinfo is rejected: it hides credentials (token@host) and enables
+	// host spoofing (github.com@evil.example).
+	return err == nil && u.Host != "" && u.User == nil
+}
+
+var secretKeyPattern = regexp.MustCompile(`(?i)(token|secret|password|passwd|api[_-]?key|apikey|credential)`)
+
+func isSecretOutputKey(key string) bool {
+	return secretKeyPattern.MatchString(key)
+}
+
+// sanitizeTerminal strips control characters (except newline and tab) so
+// server- or mold-controlled strings cannot inject ANSI escape sequences.
+func sanitizeTerminal(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // runResultSections builds the detail sections for a finished run,
@@ -94,7 +125,7 @@ func runResultSections(run *api.ForgeRun) []tui.DetailSection {
 	}
 	if run.Error != "" {
 		sections[0].Fields = append(sections[0].Fields,
-			tui.Field{Label: "Error", Value: tui.ErrorStyle.Render(run.Error)})
+			tui.Field{Label: "Error", Value: tui.ErrorStyle.Render(sanitizeTerminal(run.Error))})
 	}
 
 	links := extractOutputLinks(run.Outputs)
@@ -117,7 +148,11 @@ func runResultSections(run *api.ForgeRun) []tui.DetailSection {
 		}
 		switch val.(type) {
 		case string, bool, float64, int, int64:
-			scalarFields = append(scalarFields, tui.Field{Label: key, Value: fmt.Sprintf("%v", val)})
+			rendered := fmt.Sprintf("%v", val)
+			if isSecretOutputKey(key) {
+				rendered = "(redacted)"
+			}
+			scalarFields = append(scalarFields, tui.Field{Label: sanitizeTerminal(key), Value: sanitizeTerminal(rendered)})
 		}
 	}
 	if len(scalarFields) > 0 {
@@ -140,7 +175,8 @@ func sortedOutputKeys(outputs map[string]any) []string {
 }
 
 // offerOpenLinks opens the primary link (--open) or asks the user when the
-// session is interactive. Non-TTY sessions only get the printed links.
+// session is interactive. --no-interactive and non-TTY sessions only get the
+// printed links.
 func offerOpenLinks(links []OutputLink, openFlag bool) {
 	if len(links) == 0 {
 		return
@@ -151,7 +187,7 @@ func offerOpenLinks(links []OutputLink, openFlag bool) {
 		return
 	}
 
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if noInteractive || !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
 	}
 
@@ -163,9 +199,8 @@ func offerOpenLinks(links []OutputLink, openFlag bool) {
 }
 
 func openLink(url string) {
+	fmt.Fprintf(os.Stderr, "Opening %s\n", url)
 	if err := browser.Open(url); err != nil {
 		fmt.Fprintf(os.Stderr, "Could not open browser: %v\n", err)
-		return
 	}
-	fmt.Fprintf(os.Stderr, "Opened %s\n", url)
 }

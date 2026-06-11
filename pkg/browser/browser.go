@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 // Open launches the default browser for an http(s) URL.
@@ -23,6 +24,9 @@ func Open(rawURL string) error {
 }
 
 func validateURL(rawURL string) error {
+	if strings.ContainsAny(rawURL, " \t\"\\") {
+		return fmt.Errorf("refusing to open %q: URL contains characters that must be percent-encoded", rawURL)
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL %q: %w", rawURL, err)
@@ -32,6 +36,9 @@ func validateURL(rawURL string) error {
 	}
 	if u.Host == "" {
 		return fmt.Errorf("invalid URL %q: missing host", rawURL)
+	}
+	if u.User != nil {
+		return fmt.Errorf("refusing to open %q: URLs with embedded credentials are not supported", rawURL)
 	}
 	return nil
 }

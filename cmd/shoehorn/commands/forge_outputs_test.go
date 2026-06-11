@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -68,6 +69,59 @@ func TestExtractOutputLinks_NestedMapsAndDedupe(t *testing.T) {
 	}
 	if !seen["https://github.com/acme/svc"] || !seen["https://github.com/acme/svc/pull/1"] {
 		t.Errorf("missing expected URLs, got %v", links)
+	}
+}
+
+func TestExtractOutputLinks_RejectsURLsWithUserinfo(t *testing.T) {
+	outputs := map[string]any{
+		"clone_url": "https://x-access-token:ghs_secret123@github.com/acme/svc.git",
+		"trick_url": "https://github.com@evil.example/acme/svc",
+	}
+
+	if links := extractOutputLinks(outputs); len(links) != 0 {
+		t.Errorf("URLs with userinfo can hide credentials or spoof hosts and must be skipped, got %v", links)
+	}
+}
+
+func TestExtractOutputLinks_RecursesIntoArrays(t *testing.T) {
+	outputs := map[string]any{
+		"pull_requests": []any{
+			map[string]any{"pr_url": "https://github.com/acme/svc/pull/1"},
+			map[string]any{"pr_url": "https://github.com/acme/svc/pull/2"},
+		},
+	}
+
+	links := extractOutputLinks(outputs)
+	if len(links) != 2 {
+		t.Errorf("URLs inside arrays should be collected, got %v", links)
+	}
+}
+
+func TestIsSecretOutputKey(t *testing.T) {
+	secret := []string{"token", "github_token", "API_KEY", "apiKey", "webhook_secret", "password", "credentials"}
+	for _, k := range secret {
+		if !isSecretOutputKey(k) {
+			t.Errorf("isSecretOutputKey(%q) = false, want true", k)
+		}
+	}
+	plain := []string{"name", "owner", "files_created", "branch"}
+	for _, k := range plain {
+		if isSecretOutputKey(k) {
+			t.Errorf("isSecretOutputKey(%q) = true, want false", k)
+		}
+	}
+}
+
+func TestSanitizeTerminal_StripsControlSequences(t *testing.T) {
+	in := "repo created\x1b[2K\x1b]0;owned\x07 done\r"
+	got := sanitizeTerminal(in)
+	for _, r := range got {
+		if r < 0x20 && r != '\n' && r != '\t' {
+			t.Fatalf("sanitizeTerminal left control char %q in %q", r, got)
+		}
+	}
+	if !strings.Contains(got, "repo created") || !strings.Contains(got, "done") {
+		t.Errorf("sanitizeTerminal should keep printable text, got %q", got)
 	}
 }
 

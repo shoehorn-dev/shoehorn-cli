@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +70,63 @@ func TestWatchUntilTerminal_ReturnsAPIError(t *testing.T) {
 	_, err := watchUntilTerminal(context.Background(), getter, "run-1", time.Millisecond, nil)
 	if err == nil {
 		t.Fatal("expected API error to propagate")
+	}
+}
+
+type flakyRunGetter struct {
+	failures int
+	calls    int
+}
+
+func (f *flakyRunGetter) GetRun(ctx context.Context, runID string) (*api.ForgeRun, error) {
+	f.calls++
+	if f.calls <= f.failures {
+		return nil, fmt.Errorf("transient: connection reset")
+	}
+	return &api.ForgeRun{ID: runID, Status: "completed"}, nil
+}
+
+func TestWatchUntilTerminal_RetriesTransientErrors(t *testing.T) {
+	getter := &flakyRunGetter{failures: 2}
+
+	run, err := watchUntilTerminal(context.Background(), getter, "run-1", time.Millisecond, nil)
+	if err != nil {
+		t.Fatalf("watch should survive 2 transient errors, got: %v", err)
+	}
+	if run.Status != "completed" {
+		t.Errorf("final status = %q, want completed", run.Status)
+	}
+}
+
+func TestWatchUntilTerminal_GivesUpAfterConsecutiveErrors(t *testing.T) {
+	getter := &fakeRunGetter{err: fmt.Errorf("boom")}
+
+	_, err := watchUntilTerminal(context.Background(), getter, "run-1", time.Millisecond, nil)
+	if err == nil {
+		t.Fatal("persistent errors must eventually fail the watch")
+	}
+	if strings.Contains(err.Error(), "get run: get run") {
+		t.Errorf("error should not be double-prefixed, got: %v", err)
+	}
+}
+
+func TestPollInterval_SlowsDownForPendingApproval(t *testing.T) {
+	base := 2 * time.Second
+
+	if got := pollInterval(base, "executing"); got != base {
+		t.Errorf("executing should poll at the base interval, got %v", got)
+	}
+	if got := pollInterval(base, "pending_approval"); got < 15*time.Second {
+		t.Errorf("pending_approval is human-latency-bound and should poll slowly, got %v", got)
+	}
+	if got := pollInterval(30*time.Second, "pending_approval"); got != 30*time.Second {
+		t.Errorf("a user-chosen slower interval should be kept, got %v", got)
+	}
+}
+
+func TestPollInterval_ClampsBelowOneSecond(t *testing.T) {
+	if got := pollInterval(0, "executing"); got < time.Second {
+		t.Errorf("zero interval must clamp to at least 1s to avoid hot-looping, got %v", got)
 	}
 }
 
