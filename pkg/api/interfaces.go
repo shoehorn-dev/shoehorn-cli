@@ -68,6 +68,13 @@ type GitOpsClient interface {
 	GetGitOpsResource(ctx context.Context, id string) (*GitOpsResource, error)
 }
 
+// OperationsResourceClient defines read operations on the v2 Operations
+// Resources surface (cross-cluster workloads).
+type OperationsResourceClient interface {
+	ListOperationsResources(ctx context.Context, opts ListOperationsResourcesOpts) (*ListOperationsResourcesResult, error)
+	GetOperationsResource(ctx context.Context, id string) (*OperationsResourceDetail, error)
+}
+
 // ManifestClient defines operations on manifest validation and conversion.
 type ManifestClient interface {
 	ValidateManifest(ctx context.Context, content string) (*ValidateManifestResponse, error)
@@ -81,12 +88,13 @@ type AuthClient interface {
 
 // Compile-time interface satisfaction checks.
 var (
-	_ CatalogReader    = (*Client)(nil)
-	_ CatalogWriter    = (*Client)(nil)
-	_ ForgeClient      = (*Client)(nil)
-	_ AddonClient      = (*Client)(nil)
-	_ GovernanceClient = (*Client)(nil)
-	_ GitOpsClient     = (*Client)(nil)
-	_ ManifestClient   = (*Client)(nil)
-	_ AuthClient       = (*Client)(nil)
+	_ CatalogReader            = (*Client)(nil)
+	_ CatalogWriter            = (*Client)(nil)
+	_ ForgeClient              = (*Client)(nil)
+	_ AddonClient              = (*Client)(nil)
+	_ GovernanceClient         = (*Client)(nil)
+	_ GitOpsClient             = (*Client)(nil)
+	_ OperationsResourceClient = (*Client)(nil)
+	_ ManifestClient           = (*Client)(nil)
+	_ AuthClient               = (*Client)(nil)
 )

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -172,6 +173,48 @@ func TestListEntities_Empty(t *testing.T) {
 	}
 	if len(entities) != 0 {
 		t.Errorf("got %d entities, want 0", len(entities))
+	}
+}
+
+func TestListEntities_IncludeEndOfLife_AppendsQueryParam(t *testing.T) {
+	var capturedQuery url.Values
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.Query()
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{
+			"entities": []any{},
+			"page":     map[string]any{"total": 0},
+		})
+	}))
+	defer ts.Close()
+
+	_, err := newTestClient(ts).ListEntities(context.Background(), ListEntitiesOpts{IncludeEndOfLife: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := capturedQuery.Get("includeEndOfLife"); got != "true" {
+		t.Fatalf("expected includeEndOfLife=true, got %q", got)
+	}
+}
+
+func TestListEntities_IncludeEndOfLife_OmittedByDefault(t *testing.T) {
+	var capturedQuery url.Values
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQuery = r.URL.Query()
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{
+			"entities": []any{},
+			"page":     map[string]any{"total": 0},
+		})
+	}))
+	defer ts.Close()
+
+	_, err := newTestClient(ts).ListEntities(context.Background(), ListEntitiesOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := capturedQuery.Get("includeEndOfLife"); got != "" {
+		t.Fatalf("expected no includeEndOfLife param, got %q", got)
 	}
 }
 
