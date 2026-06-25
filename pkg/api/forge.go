@@ -131,17 +131,18 @@ type MoldsResponse struct {
 
 // ForgeRun represents a workflow run (canonical type for the api package)
 type ForgeRun struct {
-	ID          string `json:"id"`
-	Action      string `json:"action"`
-	MoldSlug    string `json:"mold_slug"`
-	Status      string `json:"status"`
-	DryRun      bool   `json:"dry_run"`
-	CreatedBy   string `json:"created_by"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	StartedAt   string `json:"started_at,omitempty"`
-	CompletedAt string `json:"completed_at,omitempty"`
-	Error       string `json:"error,omitempty"`
+	ID          string         `json:"id"`
+	Action      string         `json:"action"`
+	MoldSlug    string         `json:"mold_slug"`
+	Status      string         `json:"status"`
+	DryRun      bool           `json:"dry_run"`
+	CreatedBy   string         `json:"created_by"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at,omitempty"`
+	StartedAt   string         `json:"started_at,omitempty"`
+	CompletedAt string         `json:"completed_at,omitempty"`
+	Error       string         `json:"error,omitempty"`
+	Outputs     map[string]any `json:"outputs,omitempty"`
 }
 
 // ForgeRunsResponse is the response from /forge/runs
