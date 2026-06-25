@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	entityType    string
-	entityOwner   string
-	showScorecard bool
+	entityType       string
+	entityOwner      string
+	showScorecard    bool
+	includeEndOfLife bool
 )
 
 var entitiesCmd = &cobra.Command{
@@ -36,6 +37,7 @@ var entityCmd = &cobra.Command{
 func init() {
 	entitiesCmd.Flags().StringVar(&entityType, "type", "", "Filter by entity type (service, library, etc.)")
 	entitiesCmd.Flags().StringVar(&entityOwner, "owner", "", "Filter by owning team slug")
+	entitiesCmd.Flags().BoolVar(&includeEndOfLife, "include-end-of-life", false, "Include entities tombstoned by the source (lifecycle=end-of-life)")
 
 	entityCmd.Flags().BoolVar(&showScorecard, "scorecard", false, "Include scorecard in output")
 
@@ -50,8 +52,9 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 	}
 
 	opts := api.ListEntitiesOpts{
-		Type:  entityType,
-		Owner: entityOwner,
+		Type:             entityType,
+		Owner:            entityOwner,
+		IncludeEndOfLife: includeEndOfLife,
 	}
 
 	result, spinErr := tui.RunSpinner("Loading entities...", func() (any, error) {

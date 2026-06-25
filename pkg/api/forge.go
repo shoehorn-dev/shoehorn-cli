@@ -131,17 +131,18 @@ type MoldsResponse struct {
 
 // ForgeRun represents a workflow run (canonical type for the api package)
 type ForgeRun struct {
-	ID          string `json:"id"`
-	Action      string `json:"action"`
-	MoldSlug    string `json:"mold_slug"`
-	Status      string `json:"status"`
-	DryRun      bool   `json:"dry_run"`
-	CreatedBy   string `json:"created_by"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
-	StartedAt   string `json:"started_at,omitempty"`
-	CompletedAt string `json:"completed_at,omitempty"`
-	Error       string `json:"error,omitempty"`
+	ID          string         `json:"id"`
+	Action      string         `json:"action"`
+	MoldSlug    string         `json:"mold_slug"`
+	Status      string         `json:"status"`
+	DryRun      bool           `json:"dry_run"`
+	CreatedBy   string         `json:"created_by"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at,omitempty"`
+	StartedAt   string         `json:"started_at,omitempty"`
+	CompletedAt string         `json:"completed_at,omitempty"`
+	Error       string         `json:"error,omitempty"`
+	Outputs     map[string]any `json:"outputs,omitempty"`
 }
 
 // ForgeRunsResponse is the response from /forge/runs
@@ -152,6 +153,46 @@ type ForgeRunsResponse struct {
 		NextCursor string `json:"next_cursor"`
 		HasMore    bool   `json:"has_more"`
 	} `json:"pagination"`
+}
+
+// CreateMoldRequest is the body for POST /api/v1/forge/molds.
+// Field names mirror the JSON keys the platform handler accepts
+// (camelCase for ownerTeamIds, lowercase for the rest).
+type CreateMoldRequest struct {
+	Slug         string           `json:"slug"                   yaml:"slug"`
+	Name         string           `json:"name"                   yaml:"name"`
+	Description  string           `json:"description,omitempty"  yaml:"description,omitempty"`
+	Version      string           `json:"version"                yaml:"version"`
+	Visibility   string           `json:"visibility"             yaml:"visibility"`
+	Tags         []string         `json:"tags,omitempty"         yaml:"tags,omitempty"`
+	Icon         string           `json:"icon,omitempty"         yaml:"icon,omitempty"`
+	Category     string           `json:"category"               yaml:"category"`
+	Schema       map[string]any   `json:"schema"                 yaml:"schema"`
+	Defaults     map[string]any   `json:"defaults,omitempty"     yaml:"defaults,omitempty"`
+	Actions      []map[string]any `json:"actions"                yaml:"actions"`
+	OwnerTeamIDs []string         `json:"ownerTeamIds,omitempty" yaml:"ownerTeamIds,omitempty"`
+}
+
+// CreateMold registers a new mold from a manifest payload.
+func (c *Client) CreateMold(ctx context.Context, req CreateMoldRequest) (*MoldDetail, error) {
+	var wrapper struct {
+		Mold moldAPIResponse `json:"mold"`
+	}
+	if err := c.Post(ctx, "/api/v1/forge/molds", req, &wrapper); err != nil {
+		return nil, fmt.Errorf("create mold %s: %w", req.Slug, err)
+	}
+	raw := wrapper.Mold
+	return &MoldDetail{
+		Mold: Mold{
+			ID:          raw.ID,
+			Name:        raw.Name,
+			Slug:        raw.Slug,
+			Description: raw.Description,
+			Version:     raw.Version,
+		},
+		Actions: raw.Actions,
+		Inputs:  parseMoldInputs(raw.Schema, raw.InputOrder, raw.Defaults),
+	}, nil
 }
 
 // CreateRunRequest is the body for POST /forge/runs
