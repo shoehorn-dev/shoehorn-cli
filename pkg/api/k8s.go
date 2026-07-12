@@ -14,6 +14,10 @@ type K8sAgent struct {
 	Status      string `json:"status"`
 	Version     string `json:"version"`
 	LastSeen    string `json:"last_seen"`
+	Environment string `json:"environment,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	Region      string `json:"region,omitempty"`
+	NodeCount   int    `json:"node_count"`
 }
 
 // k8sAgentAPIItem matches the actual API JSON shape for a single agent
@@ -24,6 +28,10 @@ type k8sAgentAPIItem struct {
 	Status        string     `json:"status"`
 	OnlineStatus  string     `json:"onlineStatus"`
 	LastHeartbeat *time.Time `json:"lastHeartbeat,omitempty"`
+	Environment   string     `json:"environment,omitempty"`
+	Provider      string     `json:"provider,omitempty"`
+	Region        string     `json:"region,omitempty"`
+	NodeCount     int        `json:"nodeCount"`
 }
 
 // k8sAgentsAPIResponse matches the actual API response for /k8s/agents
@@ -63,6 +71,10 @@ func (c *Client) ListK8sAgents(ctx context.Context) ([]*K8sAgent, error) {
 			Status:      raw.OnlineStatus,
 			Version:     raw.Name,
 			LastSeen:    formatLastSeen(raw.LastHeartbeat),
+			Environment: raw.Environment,
+			Provider:    raw.Provider,
+			Region:      raw.Region,
+			NodeCount:   raw.NodeCount,
 		}
 	}
 	return agents, nil

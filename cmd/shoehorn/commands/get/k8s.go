@@ -41,7 +41,10 @@ func runGetK8s(cmd *cobra.Command, args []string) error {
 
 	rows := make([][]string, len(agents))
 	for i, a := range agents {
-		rows[i] = []string{a.ClusterName, a.Status, a.Version, a.LastSeen}
+		rows[i] = []string{
+			a.ClusterName, a.Status, a.Version, a.LastSeen,
+			emptyDash(a.Environment), emptyDash(a.Provider), emptyDash(a.Region), fmt.Sprintf("%d", a.NodeCount),
+		}
 	}
 
 	if mode == ui.ModeInteractive {
@@ -50,11 +53,18 @@ func runGetK8s(cmd *cobra.Command, args []string) error {
 			{Title: "Status", Width: 14},
 			{Title: "Version", Width: 14},
 			{Title: "Last Seen", Width: 20},
+			{Title: "Environment", Width: 12},
+			{Title: "Provider", Width: 10},
+			{Title: "Region", Width: 12},
+			{Title: "Nodes", Width: 7},
 		}
 		tuiRows := make([]table.Row, len(agents))
 		for j, a := range agents {
 			status := tui.StatusColor(a.Status).Render(a.Status)
-			tuiRows[j] = table.Row{a.ClusterName, status, a.Version, a.LastSeen}
+			tuiRows[j] = table.Row{
+				a.ClusterName, status, a.Version, a.LastSeen,
+				emptyDash(a.Environment), emptyDash(a.Provider), emptyDash(a.Region), fmt.Sprintf("%d", a.NodeCount),
+			}
 		}
 		_, err = tui.RunTable(tui.TableConfig{
 			Title:   fmt.Sprintf("Kubernetes Agents  (%d)", len(agents)),
@@ -65,8 +75,19 @@ func runGetK8s(cmd *cobra.Command, args []string) error {
 	}
 
 	return ui.RenderListResult(mode, agents, ui.ListConfig{
-		Columns:  []string{"Cluster", "Status", "Version", "Last Seen"},
+		Columns:  []string{"Cluster", "Status", "Version", "Last Seen", "Environment", "Provider", "Region", "Nodes"},
 		Rows:     rows,
 		EmptyMsg: "No Kubernetes agents found",
 	})
+}
+
+// emptyDash renders an unset cluster-metadata field as "-" instead of a blank
+// cell. environment/provider/region are only populated after an agent's
+// first push (migration 000170_add_cluster_metadata_to_k8s_agent_tokens), so
+// a freshly registered cluster legitimately has none of them yet.
+func emptyDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
