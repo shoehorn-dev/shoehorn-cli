@@ -610,6 +610,87 @@ func TestRunGetEntity_MockServer_NotFound_ShowsHint(t *testing.T) {
 	}
 }
 
+func TestRunGetK8s_MockServer_IncludesClusterMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/k8s/agents" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"agents": []map[string]any{
+					{
+						"id": 1, "clusterId": "cluster-1", "name": "v1.2.3",
+						"status": "active", "onlineStatus": "online",
+						"environment": "production", "provider": "aws", "region": "us-east-1",
+						"nodeCount": 5,
+					},
+					{
+						"id": 2, "clusterId": "cluster-2", "name": "v1.2.3",
+						"status": "active", "onlineStatus": "offline",
+					},
+				},
+				"total": 2,
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	setupTestConfig(t, srv.URL)
+	tui.SetPlainMode(true)
+	defer tui.SetPlainMode(false)
+
+	err := runGetK8s(testCmd(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestListK8sAgents_ParsesClusterMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"agents": []map[string]any{
+				{
+					"id": 1, "clusterId": "cluster-1", "name": "v1.2.3",
+					"status": "active", "onlineStatus": "online",
+					"environment": "production", "provider": "aws", "region": "us-east-1",
+					"nodeCount": 5,
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	setupTestConfig(t, srv.URL)
+
+	client, err := api.NewClientFromConfig()
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	agents, err := client.ListK8sAgents(context.Background())
+	if err != nil {
+		t.Fatalf("list k8s agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(agents))
+	}
+
+	got := agents[0]
+	if got.Environment != "production" {
+		t.Errorf("Environment = %q, want %q", got.Environment, "production")
+	}
+	if got.Provider != "aws" {
+		t.Errorf("Provider = %q, want %q", got.Provider, "aws")
+	}
+	if got.Region != "us-east-1" {
+		t.Errorf("Region = %q, want %q", got.Region, "us-east-1")
+	}
+	if got.NodeCount != 5 {
+		t.Errorf("NodeCount = %d, want %d", got.NodeCount, 5)
+	}
+}
+
 func TestRunGetTeams_MockServer_EmptyList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
