@@ -74,15 +74,7 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 		return ui.RenderYAML(entities)
 	}
 
-	colNames := []string{"ID", "Name", "Type", "Owner", "Description"}
-	rows := make([][]string, len(entities))
-	for i, e := range entities {
-		desc := e.Description
-		if len(desc) > 60 {
-			desc = desc[:60] + "…"
-		}
-		rows[i] = []string{e.ID, e.Name, e.Type, e.Owner, desc}
-	}
+	colNames, rows := entityTable(entities, includeEndOfLife)
 
 	if mode == ui.ModeInteractive {
 		tuiCols := []table.Column{
@@ -91,6 +83,9 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 			{Title: "Type", Width: 14},
 			{Title: "Owner", Width: 20},
 			{Title: "Description", Width: 45},
+		}
+		if includeEndOfLife {
+			tuiCols = append(tuiCols, table.Column{Title: "Lifecycle", Width: 14})
 		}
 		tuiRows := make([]table.Row, len(rows))
 		for i, r := range rows {
@@ -113,6 +108,32 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 
 	ui.RenderTable(colNames, rows)
 	return nil
+}
+
+// entityTable returns the headers and rows for an entity listing.
+func entityTable(entities []*api.Entity, withLifecycle bool) ([]string, [][]string) {
+	cols := []string{"ID", "Name", "Type", "Owner", "Description"}
+	if withLifecycle {
+		cols = append(cols, "Lifecycle")
+	}
+	rows := make([][]string, len(entities))
+	for i, e := range entities {
+		row := []string{e.ID, e.Name, e.Type, e.Owner, truncateRunes(e.Description, 60)}
+		if withLifecycle {
+			row = append(row, e.Lifecycle)
+		}
+		rows[i] = row
+	}
+	return cols, rows
+}
+
+// truncateRunes cuts s to n characters, not bytes.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 func runGetEntity(cmd *cobra.Command, args []string) error {
