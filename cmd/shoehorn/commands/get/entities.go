@@ -74,7 +74,15 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 		return ui.RenderYAML(entities)
 	}
 
-	colNames, rows := entityTable(entities, includeEndOfLife)
+	colNames := []string{"ID", "Name", "Type", "Owner", "Description"}
+	rows := make([][]string, len(entities))
+	for i, e := range entities {
+		desc := e.Description
+		if len(desc) > 60 {
+			desc = desc[:60] + "…"
+		}
+		rows[i] = []string{e.ID, e.Name, e.Type, e.Owner, desc}
+	}
 
 	if mode == ui.ModeInteractive {
 		tuiCols := []table.Column{
@@ -83,9 +91,6 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 			{Title: "Type", Width: 14},
 			{Title: "Owner", Width: 20},
 			{Title: "Description", Width: 45},
-		}
-		if includeEndOfLife {
-			tuiCols = append(tuiCols, table.Column{Title: "Lifecycle", Width: 14})
 		}
 		tuiRows := make([]table.Row, len(rows))
 		for i, r := range rows {
@@ -108,35 +113,6 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 
 	ui.RenderTable(colNames, rows)
 	return nil
-}
-
-// entityTable returns the column titles and rows for an entity listing. With
-// withLifecycle (the --include-end-of-life flag), a Lifecycle column tells live
-// entities from the end-of-life rows the flag brings in.
-func entityTable(entities []*api.Entity, withLifecycle bool) ([]string, [][]string) {
-	cols := []string{"ID", "Name", "Type", "Owner", "Description"}
-	if withLifecycle {
-		cols = append(cols, "Lifecycle")
-	}
-	rows := make([][]string, len(entities))
-	for i, e := range entities {
-		row := []string{e.ID, e.Name, e.Type, e.Owner, truncateRunes(e.Description, 60)}
-		if withLifecycle {
-			row = append(row, e.Lifecycle)
-		}
-		rows[i] = row
-	}
-	return cols, rows
-}
-
-// truncateRunes cuts s to at most n characters, not bytes, so a multi-byte
-// character is never split.
-func truncateRunes(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
 }
 
 func runGetEntity(cmd *cobra.Command, args []string) error {
