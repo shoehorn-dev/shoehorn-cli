@@ -31,9 +31,9 @@ func FixtureEntityDetail(overrides ...func(*api.EntityDetail)) *api.EntityDetail
 			Owner:       "platform-team",
 			Description: "A test service for unit tests",
 			Tags:        []string{"test", "go"},
-			Lifecycle:   "production",
 		},
-		Tier: "1",
+		Lifecycle: "production",
+		Tier:      "1",
 		Links: []api.EntityLink{
 			{Title: "GitHub", URL: "https://github.com/example/test-service"},
 		},

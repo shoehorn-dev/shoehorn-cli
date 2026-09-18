@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // ─── /me ────────────────────────────────────────────────────────────────────
@@ -111,16 +112,14 @@ type Entity struct {
 	Description string   `json:"description"`
 	Tags        []string `json:"tags"`
 	TenantID    string   `json:"tenant_id"`
-	// Lifecycle tells a live entity from a tombstone once --include-end-of-life
-	// brings end-of-life rows into a listing.
-	Lifecycle string `json:"lifecycle,omitempty"`
 }
 
 // EntityDetail represents full entity detail with all sub-resources
 type EntityDetail struct {
 	Entity
-	Links []EntityLink `json:"links"`
-	Tier  string       `json:"tier"`
+	Links     []EntityLink `json:"links"`
+	Lifecycle string       `json:"lifecycle"`
+	Tier      string       `json:"tier"`
 }
 
 // EntityLink represents a link on an entity
@@ -231,49 +230,37 @@ func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*En
 	if opts.IncludeEndOfLife {
 		q.Set("includeEndOfLife", "true")
 	}
-	q.Set("limit", strconv.Itoa(entitiesPageSize))
+	q.Set("limit", "100")
 
-	// Follow the cursor to the end. One page used to be the whole answer, so
-	// a catalog of 101 listed as 100 with only a debug log saying otherwise.
-	var entities []*Entity
-	seen := map[string]bool{}
-	for range maxEntityPages {
-		var resp entitiesAPIResponse
-		if err := c.Get(ctx, "/api/v1/entities?"+q.Encode(), &resp); err != nil {
-			return nil, fmt.Errorf("list entities: %w", err)
-		}
-		for _, raw := range resp.Entities {
-			entities = append(entities, &Entity{
-				ID:          raw.Service.ID,
-				Name:        raw.Service.Name,
-				Slug:        raw.Service.ID,
-				Type:        raw.Service.Type,
-				Owner:       parseOwner(raw.Owner),
-				Description: raw.Description,
-				Tags:        raw.Tags,
-				Lifecycle:   raw.Lifecycle,
-			})
-		}
+	path := "/api/v1/entities?" + q.Encode()
 
-		next := resp.Page.NextCursor
-		if next == "" {
-			return entities, nil
-		}
-		if seen[next] {
-			return nil, fmt.Errorf("list entities: the server returned cursor %q twice after %d entities", next, len(entities))
-		}
-		seen[next] = true
-		q.Set("cursor", next)
+	var resp entitiesAPIResponse
+	if err := c.Get(ctx, path, &resp); err != nil {
+		return nil, fmt.Errorf("list entities: %w", err)
 	}
-	return nil, fmt.Errorf("list entities: stopped after %d pages (%d entities); narrow the list with --type or --owner", maxEntityPages, len(entities))
+
+	if resp.Page.NextCursor != "" {
+		c.logger.Warn("results truncated",
+			zap.Int("returned", len(resp.Entities)),
+			zap.Int("total", resp.Page.Total),
+			zap.String("hint", "results limited to 100; more available via pagination"),
+		)
+	}
+
+	entities := make([]*Entity, len(resp.Entities))
+	for i, raw := range resp.Entities {
+		entities[i] = &Entity{
+			ID:          raw.Service.ID,
+			Name:        raw.Service.Name,
+			Slug:        raw.Service.ID,
+			Type:        raw.Service.Type,
+			Owner:       parseOwner(raw.Owner),
+			Description: raw.Description,
+			Tags:        raw.Tags,
+		}
+	}
+	return entities, nil
 }
-
-// entitiesPageSize is the most the entities endpoint returns per request.
-const entitiesPageSize = 100
-
-// maxEntityPages bounds the cursor walk at 100,000 entities, so a server that
-// never stops handing out cursors can't keep the CLI fetching forever.
-const maxEntityPages = 1000
 
 // entityDetailAPIResponse matches the single entity API response
 type entityDetailAPIResponse struct {
@@ -315,9 +302,9 @@ func (c *Client) GetEntity(ctx context.Context, id string) (*EntityDetail, error
 			Owner:       parseOwner(raw.Owner),
 			Description: raw.Description,
 			Tags:        raw.Tags,
-			Lifecycle:   raw.Lifecycle,
 		},
-		Links: links,
+		Links:     links,
+		Lifecycle: raw.Lifecycle,
 	}, nil
 }
 
