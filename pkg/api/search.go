@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 )
 
 // SearchHit is a single search result item
@@ -34,15 +35,16 @@ type searchAPIResult struct {
 // searchAPIResponse matches the actual API response for /search
 type searchAPIResponse struct {
 	Results []searchAPIResult `json:"results"`
-	Page    struct {
-		Total int `json:"total"`
-	} `json:"page"`
+	Total   int               `json:"total"`
 }
 
-// Search performs a full-text search across entities
-func (c *Client) Search(ctx context.Context, query string) (*SearchResult, error) {
+// Search performs a full-text search, returning up to limit results.
+func (c *Client) Search(ctx context.Context, query string, limit int) (*SearchResult, error) {
 	q := url.Values{}
 	q.Set("q", query)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
 	var resp searchAPIResponse
 	if err := c.Get(ctx, "/api/v1/search?"+q.Encode(), &resp); err != nil {
 		return nil, fmt.Errorf("search %q: %w", query, err)
@@ -61,6 +63,6 @@ func (c *Client) Search(ctx context.Context, query string) (*SearchResult, error
 
 	return &SearchResult{
 		Hits:       hits,
-		TotalCount: resp.Page.Total,
+		TotalCount: resp.Total,
 	}, nil
 }

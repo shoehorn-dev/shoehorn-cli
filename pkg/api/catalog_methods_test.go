@@ -277,21 +277,23 @@ func TestSearch_Success(t *testing.T) {
 		if r.URL.Query().Get("q") != "payment" {
 			t.Errorf("query not passed: %s", r.URL.RawQuery)
 		}
-		json.NewEncoder(w).Encode(map[string]any{
-			"results": []map[string]any{
-				{"id": "svc-1", "title": "payment-service", "type": "service", "score": 0.95},
-			},
-			"page": map[string]any{"total": 1},
-		})
+		if got := r.URL.Query().Get("limit"); got != "50" {
+			t.Errorf("limit = %q, want 50", got)
+		}
+		w.Write([]byte(`{
+			"results": [{"id": "svc-1", "type": "entity", "title": "payment-service", "description": "Takes payments", "score": 0.95}],
+			"total": 37,
+			"page": {"limit": 50, "offset": 0, "nextCursor": null}
+		}`))
 	}))
 	defer ts.Close()
 
-	sr, err := newTestClient(ts).Search(context.Background(), "payment")
+	sr, err := newTestClient(ts).Search(context.Background(), "payment", 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sr.TotalCount != 1 {
-		t.Errorf("TotalCount = %d, want 1", sr.TotalCount)
+	if sr.TotalCount != 37 {
+		t.Errorf("TotalCount = %d, want 37", sr.TotalCount)
 	}
 	if sr.Hits[0].Name != "payment-service" {
 		t.Errorf("Hit name = %q, want payment-service", sr.Hits[0].Name)
@@ -823,24 +825,34 @@ func TestGetEntityChangelog_Success(t *testing.T) {
 
 func TestGetEntityScorecard_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
-			"score": 92, "grade": "A", "max_score": 100,
-			"checks": []map[string]any{
-				{"name": "has-docs", "passed": true, "weight": 10},
-			},
-		})
+		w.Write([]byte(`{
+			"entityId": "checkout-api", "entityName": "Checkout API", "overallScore": 64, "grade": "D",
+			"categories": [{"name": "documentation", "displayName": "Documentation", "score": 6, "maxScore": 16, "weight": 25, "passed": 2, "total": 4}],
+			"rules": [
+				{"ruleId": "readme-exists", "categoryName": "documentation", "name": "Has README", "description": "Repository has a README file", "passed": true, "points": 5, "maxPoints": 5, "severity": "required"},
+				{"ruleId": "runbooks-exist", "categoryName": "documentation", "name": "Has runbooks", "description": "Entity has runbook documentation", "passed": false, "points": 0, "maxPoints": 5, "severity": "recommended"}
+			],
+			"rulesPassed": 1, "rulesTotal": 2, "calculatedAt": "2026-09-18T20:40:00Z"
+		}`))
 	}))
 	defer ts.Close()
 
-	sc, err := newTestClient(ts).GetEntityScorecard(context.Background(), "svc-1")
+	sc, err := newTestClient(ts).GetEntityScorecard(context.Background(), "checkout-api")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sc.Score != 92 || sc.Grade != "A" {
-		t.Errorf("Score=%d, Grade=%q", sc.Score, sc.Grade)
+	if sc.Score != 64 || sc.MaxScore != 100 || sc.Grade != "D" {
+		t.Errorf("Score=%d MaxScore=%d Grade=%q, want 64/100 D", sc.Score, sc.MaxScore, sc.Grade)
 	}
-	if len(sc.Checks) != 1 || !sc.Checks[0].Passed {
-		t.Errorf("Checks = %+v", sc.Checks)
+	if sc.UpdatedAt != "2026-09-18T20:40:00Z" {
+		t.Errorf("UpdatedAt = %q", sc.UpdatedAt)
+	}
+	want := []ScorecardCheck{
+		{Name: "Has README", Passed: true, Weight: 5, Message: "Repository has a README file"},
+		{Name: "Has runbooks", Passed: false, Weight: 5, Message: "Entity has runbook documentation"},
+	}
+	if len(sc.Checks) != len(want) || sc.Checks[0] != want[0] || sc.Checks[1] != want[1] {
+		t.Errorf("Checks = %+v, want %+v", sc.Checks, want)
 	}
 }
 

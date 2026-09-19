@@ -48,7 +48,11 @@ var rootCmd = &cobra.Command{
 	Long: `Shoehorn CLI provides command-line access to the Shoehorn platform.
 
 Use it to authenticate, manage workflows, and interact with the Forge service.`,
+	// main prints the error.
+	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Usage is for flag errors, which happen before this hook.
+		cmd.SilenceUsage = true
 		if noInteractive {
 			tui.SetPlainMode(true)
 		}
