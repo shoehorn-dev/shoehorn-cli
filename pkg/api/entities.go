@@ -375,13 +375,37 @@ type ScorecardCheck struct {
 	Message string `json:"message"`
 }
 
+// scorecardAPIResponse is the platform's scorecard (models.EntityScorecard).
+// overallScore is already a percentage.
+type scorecardAPIResponse struct {
+	OverallScore int    `json:"overallScore"`
+	Grade        string `json:"grade"`
+	Rules        []struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Passed      bool   `json:"passed"`
+		MaxPoints   int    `json:"maxPoints"`
+	} `json:"rules"`
+	CalculatedAt string `json:"calculatedAt"`
+}
+
 // GetEntityScorecard fetches an entity's scorecard
 func (c *Client) GetEntityScorecard(ctx context.Context, id string) (*Scorecard, error) {
-	var resp Scorecard
+	var resp scorecardAPIResponse
 	if err := c.Get(ctx, fmt.Sprintf("/api/v1/entities/%s/scorecard", url.PathEscape(id)), &resp); err != nil {
 		return nil, fmt.Errorf("get entity scorecard %s: %w", id, err)
 	}
-	return &resp, nil
+	checks := make([]ScorecardCheck, len(resp.Rules))
+	for i, r := range resp.Rules {
+		checks[i] = ScorecardCheck{Name: r.Name, Passed: r.Passed, Weight: r.MaxPoints, Message: r.Description}
+	}
+	return &Scorecard{
+		Score:     resp.OverallScore,
+		Grade:     resp.Grade,
+		MaxScore:  100,
+		Checks:    checks,
+		UpdatedAt: resp.CalculatedAt,
+	}, nil
 }
 
 // ─── Entity Write Operations ────────────────────────────────────────────────

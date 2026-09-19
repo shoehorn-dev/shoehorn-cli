@@ -18,12 +18,20 @@ var searchCmd = &cobra.Command{
 	RunE:  runSearch,
 }
 
+const defaultSearchLimit = 20
+
+var searchLimit = defaultSearchLimit
+
 func init() {
+	searchCmd.Flags().IntVar(&searchLimit, "limit", defaultSearchLimit, "maximum number of results (1-100)")
 	rootCmd.AddCommand(searchCmd)
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
 	query := args[0]
+	if searchLimit < 1 || searchLimit > 100 {
+		return fmt.Errorf("--limit must be between 1 and 100, got %d", searchLimit)
+	}
 
 	client, err := api.NewClientFromConfig(api.WithLogger(Logger))
 	if err != nil {
@@ -32,7 +40,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	result, spinErr := tui.RunSpinner(fmt.Sprintf("Searching for %q...", query), func() (any, error) {
-		return client.Search(ctx, query)
+		return client.Search(ctx, query, searchLimit)
 	})
 	if spinErr != nil {
 		return fmt.Errorf("search: %w", spinErr)

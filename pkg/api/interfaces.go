@@ -25,7 +25,7 @@ type CatalogReader interface {
 	GetUser(ctx context.Context, id string) (*UserDetail, error)
 	ListGroups(ctx context.Context) ([]*Group, error)
 	GetGroupRoles(ctx context.Context, groupName string) ([]*Role, error)
-	Search(ctx context.Context, query string) (*SearchResult, error)
+	Search(ctx context.Context, query string, limit int) (*SearchResult, error)
 	ListK8sAgents(ctx context.Context) ([]*K8sAgent, error)
 }
 

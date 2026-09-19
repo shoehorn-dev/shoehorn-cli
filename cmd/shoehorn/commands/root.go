@@ -48,7 +48,14 @@ var rootCmd = &cobra.Command{
 	Long: `Shoehorn CLI provides command-line access to the Shoehorn platform.
 
 Use it to authenticate, manage workflows, and interact with the Forge service.`,
+	// main prints the returned error; cobra must not print it a second time.
+	SilenceErrors: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Flags and arguments parsed fine, so a failure from here on is a runtime
+		// result (a failed check, an API error), not a usage mistake: don't bury
+		// it under the usage block. Flag and argument errors happen before this
+		// hook and still show usage.
+		cmd.SilenceUsage = true
 		if noInteractive {
 			tui.SetPlainMode(true)
 		}

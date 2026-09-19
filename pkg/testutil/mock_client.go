@@ -24,7 +24,7 @@ type MockClient struct {
 	GetUserFunc            func(ctx context.Context, id string) (*api.UserDetail, error)
 	ListGroupsFunc         func(ctx context.Context) ([]*api.Group, error)
 	GetGroupRolesFunc      func(ctx context.Context, groupName string) ([]*api.Role, error)
-	SearchFunc             func(ctx context.Context, query string) (*api.SearchResult, error)
+	SearchFunc             func(ctx context.Context, query string, limit int) (*api.SearchResult, error)
 	ListK8sAgentsFunc      func(ctx context.Context) ([]*api.K8sAgent, error)
 
 	// ForgeClient
@@ -152,11 +152,11 @@ func (m *MockClient) GetGroupRoles(ctx context.Context, groupName string) ([]*ap
 	return m.GetGroupRolesFunc(ctx, groupName)
 }
 
-func (m *MockClient) Search(ctx context.Context, query string) (*api.SearchResult, error) {
+func (m *MockClient) Search(ctx context.Context, query string, limit int) (*api.SearchResult, error) {
 	if m.SearchFunc == nil {
 		panic("MockClient.SearchFunc not set")
 	}
-	return m.SearchFunc(ctx, query)
+	return m.SearchFunc(ctx, query, limit)
 }
 
 func (m *MockClient) ListK8sAgents(ctx context.Context) ([]*api.K8sAgent, error) {
