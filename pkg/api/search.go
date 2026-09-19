@@ -32,15 +32,13 @@ type searchAPIResult struct {
 	Score       float64 `json:"score"`
 }
 
-// searchAPIResponse matches the actual API response for /search: the match
-// count is the top-level total; page carries only limit, offset and nextCursor.
+// searchAPIResponse matches the actual API response for /search
 type searchAPIResponse struct {
 	Results []searchAPIResult `json:"results"`
 	Total   int               `json:"total"`
 }
 
-// Search performs a full-text search. limit is sent when positive; the API
-// accepts 1-100 and defaults to 20.
+// Search performs a full-text search, returning up to limit results.
 func (c *Client) Search(ctx context.Context, query string, limit int) (*SearchResult, error) {
 	q := url.Values{}
 	q.Set("q", query)

@@ -36,8 +36,6 @@ func TestSearch_LimitFlag(t *testing.T) {
 		}
 	}
 
-	// Each CLI run is a fresh process: a run without --limit sends the default,
-	// whatever an earlier run in this test binary set.
 	if _, err := runRoot(t, "search", "checkout", "-I"); err != nil {
 		t.Fatalf("search without --limit: %v", err)
 	}

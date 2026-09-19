@@ -12,10 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// `shoehorn check scorecard` is a CI gate: it reads the real score, fails below
-// the minimum with the score in the error, and prints that error once, without
-// the command's usage block.
-
 func scorecardServer(t *testing.T, score int) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,8 +55,7 @@ func runRoot(t *testing.T, args ...string) (string, error) {
 		rootCmd.SetErr(nil)
 		rootCmd.SetArgs(nil)
 	})
-	// Each CLI run is a fresh process; tests share one command tree, so undo what
-	// an earlier Execute left behind: SilenceUsage and bound flag values.
+	// Tests share one command tree; reset what earlier runs left behind.
 	resetSilenceUsage(rootCmd)
 	searchLimit = defaultSearchLimit
 	err := rootCmd.Execute()

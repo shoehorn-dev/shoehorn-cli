@@ -272,8 +272,6 @@ func TestGetEntity_Success(t *testing.T) {
 
 // --- Search ---
 
-// The fixture is the platform's /api/v1/search shape: the match count is the
-// top-level `total`; `page` carries only limit, offset and nextCursor.
 func TestSearch_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("q") != "payment" {
@@ -825,8 +823,6 @@ func TestGetEntityChangelog_Success(t *testing.T) {
 	}
 }
 
-// The fixture is the platform's response (GET /api/v1/entities/{id}/scorecard,
-// models.EntityScorecard): overallScore, grade, categories and rules.
 func TestGetEntityScorecard_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(`{

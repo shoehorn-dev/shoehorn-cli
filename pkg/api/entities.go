@@ -375,8 +375,7 @@ type ScorecardCheck struct {
 	Message string `json:"message"`
 }
 
-// scorecardAPIResponse is the platform's scorecard (models.EntityScorecard).
-// overallScore is already a percentage.
+// scorecardAPIResponse is the API's scorecard shape.
 type scorecardAPIResponse struct {
 	OverallScore int    `json:"overallScore"`
 	Grade        string `json:"grade"`
