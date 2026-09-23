@@ -345,7 +345,8 @@ func flattenResources(raw json.RawMessage) ([]Resource, error) {
 		return nil, nil
 	}
 	var byProvider map[string][]Resource
-	if err := json.Unmarshal(raw, &byProvider); err == nil {
+	mapErr := json.Unmarshal(raw, &byProvider)
+	if mapErr == nil {
 		providers := make([]string, 0, len(byProvider))
 		for p := range byProvider {
 			providers = append(providers, p)
@@ -358,8 +359,8 @@ func flattenResources(raw json.RawMessage) ([]Resource, error) {
 		return out, nil
 	}
 	var flat []Resource
-	if err := json.Unmarshal(raw, &flat); err != nil {
-		return nil, fmt.Errorf("decode resources: %w", err)
+	if listErr := json.Unmarshal(raw, &flat); listErr != nil {
+		return nil, fmt.Errorf("decode resources: neither keyed by provider (%v) nor a list (%v)", mapErr, listErr)
 	}
 	return flat, nil
 }
