@@ -88,8 +88,13 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to validate manifest: %w", err)
 	}
 
-	// Output based on format
-	if validateFormat == "json" {
+	// Output based on format. The root -o flag counts unless --format was set
+	// explicitly, so `validate -o json` prints JSON like every other verb.
+	format := validateFormat
+	if !cmd.Flags().Changed("format") && outputFormat == "json" {
+		format = "json"
+	}
+	if format == "json" {
 		output := map[string]any{
 			"file":   filename,
 			"valid":  result.Valid,

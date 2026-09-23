@@ -51,7 +51,12 @@ func runValidateMold(cmd *cobra.Command, args []string) error {
 
 	hasFailure := !result.Valid || (validateMoldStrict && len(result.Warnings) > 0)
 
-	if validateMoldFormat == "json" {
+	// The root -o flag counts unless --format was set explicitly.
+	format := validateMoldFormat
+	if !cmd.Flags().Changed("format") && outputFormat == "json" {
+		format = "json"
+	}
+	if format == "json" {
 		return outputJSON(filename, result, hasFailure)
 	}
 	return outputText(filename, result, hasFailure)
