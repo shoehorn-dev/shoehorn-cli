@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -316,19 +317,52 @@ func (c *Client) GetEntity(ctx context.Context, id string) (*EntityDetail, error
 	}, nil
 }
 
-// GetEntityResources fetches an entity's associated resources
+// GetEntityResources fetches an entity's associated resources. The API keys
+// them by provider ({"resources":{"kubernetes":[...]}}); the list comes back
+// flattened, providers in name order. A flat list is accepted too.
 func (c *Client) GetEntityResources(ctx context.Context, id string) ([]*Resource, error) {
 	var resp struct {
-		Resources []Resource `json:"resources"`
+		Resources json.RawMessage `json:"resources"`
 	}
 	if err := c.Get(ctx, fmt.Sprintf("/api/v1/entities/%s/resources", url.PathEscape(id)), &resp); err != nil {
 		return nil, fmt.Errorf("get entity resources %s: %w", id, err)
 	}
-	resources := make([]*Resource, len(resp.Resources))
-	for i := range resp.Resources {
-		resources[i] = &resp.Resources[i]
+	flat, err := flattenResources(resp.Resources)
+	if err != nil {
+		return nil, fmt.Errorf("get entity resources %s: %w", id, err)
+	}
+	resources := make([]*Resource, len(flat))
+	for i := range flat {
+		resources[i] = &flat[i]
 	}
 	return resources, nil
+}
+
+// flattenResources decodes the provider-keyed shape, or a flat list, into one
+// list. Empty and absent both mean no resources.
+func flattenResources(raw json.RawMessage) ([]Resource, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var byProvider map[string][]Resource
+	mapErr := json.Unmarshal(raw, &byProvider)
+	if mapErr == nil {
+		providers := make([]string, 0, len(byProvider))
+		for p := range byProvider {
+			providers = append(providers, p)
+		}
+		sort.Strings(providers)
+		var out []Resource
+		for _, p := range providers {
+			out = append(out, byProvider[p]...)
+		}
+		return out, nil
+	}
+	var flat []Resource
+	if listErr := json.Unmarshal(raw, &flat); listErr != nil {
+		return nil, fmt.Errorf("decode resources: neither keyed by provider (%v) nor a list (%v)", mapErr, listErr)
+	}
+	return flat, nil
 }
 
 // GetEntityStatus fetches an entity's live health/status
