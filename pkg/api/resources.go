@@ -50,14 +50,14 @@ type OperationsResourceDeviation struct {
 // OperationsResourceDrift is one computed cross-cluster drift dimension
 // within one environment.
 type OperationsResourceDrift struct {
-	Environment   string                         `json:"environment"`
-	Dimension     string                         `json:"dimension"`
-	BaselineValue string                         `json:"baseline_value"`
-	Severity      string                         `json:"severity"`
-	Deviations    []OperationsResourceDeviation  `json:"deviations"`
-	Accepted      bool                           `json:"accepted"`
-	AcceptedAt    *time.Time                     `json:"accepted_at,omitempty"`
-	AcceptedBy    string                         `json:"accepted_by,omitempty"`
+	Environment   string                        `json:"environment"`
+	Dimension     string                        `json:"dimension"`
+	BaselineValue string                        `json:"baseline_value"`
+	Severity      string                        `json:"severity"`
+	Deviations    []OperationsResourceDeviation `json:"deviations"`
+	Accepted      bool                          `json:"accepted"`
+	AcceptedAt    *time.Time                    `json:"accepted_at,omitempty"`
+	AcceptedBy    string                        `json:"accepted_by,omitempty"`
 }
 
 // OperationsResourceBaselineConfig is one environment's baseline override:
