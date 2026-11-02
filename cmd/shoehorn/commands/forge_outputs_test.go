@@ -114,7 +114,7 @@ func TestIsSecretOutputKey(t *testing.T) {
 
 func TestSanitizeTerminal_StripsControlSequences(t *testing.T) {
 	in := "repo created\x1b[2K\x1b]0;owned\x07 done\r"
-	got := sanitizeTerminal(in)
+	got := SanitizeTerminal(in)
 	for _, r := range got {
 		if r < 0x20 && r != '\n' && r != '\t' {
 			t.Fatalf("sanitizeTerminal left control char %q in %q", r, got)

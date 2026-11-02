@@ -347,6 +347,105 @@ func TestOrDash(t *testing.T) {
 	}
 }
 
+// ─── v2: cross-cluster drift + baseline config detail sections ────────────
+
+func TestDriftSectionFields_RendersDimensionWithState(t *testing.T) {
+	r := &api.OperationsResource{
+		Drift: []api.OperationsResourceDrift{
+			{Environment: "production", Dimension: "image", BaselineValue: "v1.2.4", Severity: "drift",
+				Deviations: []api.OperationsResourceDeviation{{ClusterID: "prod-ap", Value: "v1.2.1"}}},
+		},
+	}
+	fields := driftSectionFields(r)
+	if len(fields) != 1 {
+		t.Fatalf("fields = %+v, want 1", fields)
+	}
+	if fields[0].Label != "production / image" {
+		t.Errorf("label = %q", fields[0].Label)
+	}
+	if !strings.Contains(fields[0].Value, "v1.2.4") || !strings.Contains(fields[0].Value, "drift") {
+		t.Errorf("value = %q, want baseline + state", fields[0].Value)
+	}
+}
+
+func TestDriftSectionFields_AcceptedRendersDistinctlyFromDrift(t *testing.T) {
+	r := &api.OperationsResource{
+		Drift: []api.OperationsResourceDrift{
+			{Environment: "production", Dimension: "image", BaselineValue: "v1", Severity: "drift", Accepted: true},
+		},
+	}
+	fields := driftSectionFields(r)
+	if !strings.Contains(fields[0].Value, "accepted") {
+		t.Errorf("value = %q, want to mention accepted", fields[0].Value)
+	}
+	if strings.Contains(fields[0].Value, "· drift") {
+		t.Errorf("value = %q, accepted dimension must not also read as plain drift", fields[0].Value)
+	}
+}
+
+func TestDriftSectionFields_NoDriftReturnsEmpty(t *testing.T) {
+	if fields := driftSectionFields(&api.OperationsResource{}); len(fields) != 0 {
+		t.Errorf("fields = %+v, want none", fields)
+	}
+}
+
+func TestBaselineConfigSectionFields_RendersPinAndDiffState(t *testing.T) {
+	r := &api.OperationsResource{
+		BaselineConfig: []api.OperationsResourceBaselineConfig{
+			{Environment: "production", PinnedClusterID: "prod-eu", DiffEnabled: true},
+			{Environment: "canary", DiffEnabled: false},
+		},
+	}
+	fields := baselineConfigSectionFields(r)
+	if len(fields) != 2 {
+		t.Fatalf("fields = %+v, want 2", fields)
+	}
+	if fields[0].Label != "production" || !strings.Contains(fields[0].Value, "prod-eu") {
+		t.Errorf("fields[0] = %+v", fields[0])
+	}
+	if fields[1].Label != "canary" || !strings.Contains(fields[1].Value, "off") {
+		t.Errorf("fields[1] = %+v, want diffing-off noted", fields[1])
+	}
+}
+
+func TestBaselineConfigSectionFields_NoneReturnsEmpty(t *testing.T) {
+	if fields := baselineConfigSectionFields(&api.OperationsResource{}); len(fields) != 0 {
+		t.Errorf("fields = %+v, want none", fields)
+	}
+}
+
+func TestRunGetResourceDetail_MockServer_RendersDriftAndBaselineConfig(t *testing.T) {
+	resetResourcesFlags()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"resource": map[string]any{
+				"id": "rs_abc", "name": "checkout", "subtype": "Deployment", "status": "Degraded",
+				"drift": []map[string]any{
+					{"environment": "production", "dimension": "image", "baseline_value": "v1.2.4", "severity": "drift",
+						"deviations": []map[string]any{{"cluster_id": "prod-ap", "value": "v1.2.1"}}, "accepted": false},
+				},
+				"baseline_config": []map[string]any{
+					{"environment": "production", "pinned_cluster_id": "prod-eu", "diff_enabled": true},
+				},
+			},
+			"events": []any{},
+		})
+	}))
+	defer srv.Close()
+
+	setupTestConfig(t, srv.URL)
+	tui.SetPlainMode(true)
+	defer tui.SetPlainMode(false)
+
+	// Smoke test through the real command path: the field-building logic
+	// itself is covered by the direct unit tests above; this just proves
+	// the detail command doesn't error with drift/baseline_config present.
+	if err := runGetResources(testCmd(), []string{"rs_abc"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestFormatResourceLastSeen(t *testing.T) {
 	if got := formatResourceLastSeen(nil); got != "never" {
 		t.Errorf("formatResourceLastSeen(nil) = %q, want %q", got, "never")
