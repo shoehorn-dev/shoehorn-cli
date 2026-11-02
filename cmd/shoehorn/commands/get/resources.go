@@ -217,6 +217,13 @@ func runGetResourceDetail(cmd *cobra.Command, id string) error {
 		})
 	}
 
+	if fields := driftSectionFields(r); len(fields) > 0 {
+		sections = append(sections, tui.DetailSection{Title: fmt.Sprintf("Drift (%d)", len(fields)), Fields: fields})
+	}
+	if fields := baselineConfigSectionFields(r); len(fields) > 0 {
+		sections = append(sections, tui.DetailSection{Title: "Baseline config", Fields: fields})
+	}
+
 	if len(r.Issues) > 0 {
 		issueFields := make([]tui.Field, len(r.Issues))
 		for i, is := range r.Issues {
@@ -287,6 +294,47 @@ func resourceReplicas(r *api.OperationsResource) string {
 		desired += c.ReplicasDesired
 	}
 	return fmt.Sprintf("%d/%d", ready, desired)
+}
+
+// driftSectionFields renders each cross-cluster drift dimension as one
+// field: "<environment> / <dimension>" -> "baseline <v> · N deviating ·
+// <state>", where state is "accepted" (silenced until the values change
+// again) or the raw severity ("drift"/"informational").
+func driftSectionFields(r *api.OperationsResource) []tui.Field {
+	fields := make([]tui.Field, 0, len(r.Drift))
+	for _, d := range r.Drift {
+		state := d.Severity
+		if d.Accepted {
+			state = "accepted"
+		}
+		// environment/dimension/baselineValue/severity are server-supplied;
+		// sanitize before printing so a crafted value cannot inject an
+		// ANSI/OSC escape sequence into the terminal (security review LOW-2).
+		fields = append(fields, tui.Field{
+			Label: fmt.Sprintf("%s / %s", commands.SanitizeTerminal(d.Environment), commands.SanitizeTerminal(d.Dimension)),
+			Value: fmt.Sprintf("baseline %s · %d deviating · %s",
+				commands.SanitizeTerminal(d.BaselineValue), len(d.Deviations), commands.SanitizeTerminal(state)),
+		})
+	}
+	return fields
+}
+
+// baselineConfigSectionFields renders each environment carrying a baseline
+// override: the pinned cluster (or "auto") and whether diffing is off.
+func baselineConfigSectionFields(r *api.OperationsResource) []tui.Field {
+	fields := make([]tui.Field, 0, len(r.BaselineConfig))
+	for _, c := range r.BaselineConfig {
+		v := "auto"
+		if c.PinnedClusterID != "" {
+			// server-supplied; sanitize before printing (security review LOW-2).
+			v = "pinned: " + commands.SanitizeTerminal(c.PinnedClusterID)
+		}
+		if !c.DiffEnabled {
+			v += " · diffing off"
+		}
+		fields = append(fields, tui.Field{Label: commands.SanitizeTerminal(c.Environment), Value: v})
+	}
+	return fields
 }
 
 // orDash returns the value, or an em-dash when empty.

@@ -32,6 +32,41 @@ type OperationsResource struct {
 	LastDeployedAt *time.Time                  `json:"last_deployed_at"`
 	MetricsP95CPU  *OperationsResourceMetric   `json:"metrics_p95_cpu"`
 	MetricsP95Mem  *OperationsResourceMetric   `json:"metrics_p95_mem"`
+	// Drift / BaselineConfig (v2, cross-cluster drift + baseline config):
+	// present only on the detail fetch (GetOperationsResource), never on a
+	// list row: the platform embeds them detail-only to avoid an N+1.
+	Drift          []OperationsResourceDrift          `json:"drift,omitempty"`
+	BaselineConfig []OperationsResourceBaselineConfig `json:"baseline_config,omitempty"`
+}
+
+// OperationsResourceDeviation is one cluster that diverges from the
+// baseline on a drift dimension.
+type OperationsResourceDeviation struct {
+	ClusterID string `json:"cluster_id"`
+	Value     string `json:"value"`
+	Delta     string `json:"delta,omitempty"`
+}
+
+// OperationsResourceDrift is one computed cross-cluster drift dimension
+// within one environment.
+type OperationsResourceDrift struct {
+	Environment   string                        `json:"environment"`
+	Dimension     string                        `json:"dimension"`
+	BaselineValue string                        `json:"baseline_value"`
+	Severity      string                        `json:"severity"`
+	Deviations    []OperationsResourceDeviation `json:"deviations"`
+	Accepted      bool                          `json:"accepted"`
+	AcceptedAt    *time.Time                    `json:"accepted_at,omitempty"`
+	AcceptedBy    string                        `json:"accepted_by,omitempty"`
+}
+
+// OperationsResourceBaselineConfig is one environment's baseline override:
+// a pinned cluster (instead of majority-vote consensus) and/or diffing
+// turned off. Only environments carrying a real override are ever present.
+type OperationsResourceBaselineConfig struct {
+	Environment     string `json:"environment"`
+	PinnedClusterID string `json:"pinned_cluster_id,omitempty"`
+	DiffEnabled     bool   `json:"diff_enabled"`
 }
 
 // OperationsResourceIdentity is the quadruple-key plus a display name hint.

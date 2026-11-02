@@ -96,14 +96,18 @@ func isSecretOutputKey(key string) bool {
 	return secretKeyPattern.MatchString(key)
 }
 
-// sanitizeTerminal strips control characters (except newline and tab) so
-// server- or mold-controlled strings cannot inject ANSI escape sequences.
-func sanitizeTerminal(s string) string {
+// SanitizeTerminal strips control characters (except newline and tab),
+// including the C1 range (0x80-0x9f, e.g. U+009B CSI, usable as an 8-bit
+// escape-sequence introducer on some terminals), so server- or
+// mold-controlled strings cannot inject ANSI/OSC escape sequences into the
+// terminal. Exported for use by other commands packages (e.g. get) that
+// render server-supplied fields.
+func SanitizeTerminal(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' {
 			return r
 		}
-		if r < 0x20 || r == 0x7f {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
 			return -1
 		}
 		return r
@@ -125,7 +129,7 @@ func runResultSections(run *api.ForgeRun) []tui.DetailSection {
 	}
 	if run.Error != "" {
 		sections[0].Fields = append(sections[0].Fields,
-			tui.Field{Label: "Error", Value: tui.ErrorStyle.Render(sanitizeTerminal(run.Error))})
+			tui.Field{Label: "Error", Value: tui.ErrorStyle.Render(SanitizeTerminal(run.Error))})
 	}
 
 	links := extractOutputLinks(run.Outputs)
@@ -152,7 +156,7 @@ func runResultSections(run *api.ForgeRun) []tui.DetailSection {
 			if isSecretOutputKey(key) {
 				rendered = "(redacted)"
 			}
-			scalarFields = append(scalarFields, tui.Field{Label: sanitizeTerminal(key), Value: sanitizeTerminal(rendered)})
+			scalarFields = append(scalarFields, tui.Field{Label: SanitizeTerminal(key), Value: SanitizeTerminal(rendered)})
 		}
 	}
 	if len(scalarFields) > 0 {
