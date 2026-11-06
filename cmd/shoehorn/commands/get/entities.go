@@ -19,6 +19,7 @@ var (
 	entityOwner      string
 	showScorecard    bool
 	includeEndOfLife bool
+	entitiesLimit    int
 )
 
 var entitiesCmd = &cobra.Command{
@@ -38,6 +39,7 @@ func init() {
 	entitiesCmd.Flags().StringVar(&entityType, "type", "", "Filter by entity type (service, library, etc.)")
 	entitiesCmd.Flags().StringVar(&entityOwner, "owner", "", "Filter by owning team slug")
 	entitiesCmd.Flags().BoolVar(&includeEndOfLife, "include-end-of-life", false, "Include entities tombstoned by the source (lifecycle=end-of-life)")
+	entitiesCmd.Flags().IntVar(&entitiesLimit, "limit", 0, "Stop after this many entities (0 fetches all)")
 
 	entityCmd.Flags().BoolVar(&showScorecard, "scorecard", false, "Include scorecard in output")
 
@@ -46,6 +48,10 @@ func init() {
 }
 
 func runGetEntities(cmd *cobra.Command, args []string) error {
+	if entitiesLimit < 0 {
+		return fmt.Errorf("--limit must be 0 or greater, got %d", entitiesLimit)
+	}
+
 	client, err := api.NewClientFromConfig(api.WithLogger(commands.Logger))
 	if err != nil {
 		return err
@@ -55,23 +61,34 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 		Type:             entityType,
 		Owner:            entityOwner,
 		IncludeEndOfLife: includeEndOfLife,
+		Limit:            entitiesLimit,
 	}
 
 	result, spinErr := tui.RunSpinner("Loading entities...", func() (any, error) {
 		return client.ListEntities(cmd.Context(), opts)
 	})
-	if spinErr != nil {
-		return fmt.Errorf("list entities: %w", spinErr)
-	}
 
-	entities := result.([]*api.Entity)
+	// Render partial results, but not on a cancelled context, so piped output never looks complete when it isn't.
+	var entities []*api.Entity
+	if result != nil {
+		entities = result.([]*api.Entity)
+	}
+	if spinErr != nil && (len(entities) == 0 || cmd.Context().Err() != nil) {
+		return spinErr
+	}
 
 	mode := ui.DetectMode(commands.Interactive(), commands.NoInteractive(), commands.OutputFormat())
 	if mode == ui.ModeJSON {
-		return ui.RenderJSON(entities)
+		if err := ui.RenderJSON(entities); err != nil {
+			return err
+		}
+		return spinErr
 	}
 	if mode == ui.ModeYAML {
-		return ui.RenderYAML(entities)
+		if err := ui.RenderYAML(entities); err != nil {
+			return err
+		}
+		return spinErr
 	}
 
 	colNames, rows := entityTable(entities, includeEndOfLife)
@@ -91,23 +108,34 @@ func runGetEntities(cmd *cobra.Command, args []string) error {
 		for i, r := range rows {
 			tuiRows[i] = table.Row(r)
 		}
-		title := fmt.Sprintf("Entities  (%d)", len(entities))
-		if entityType != "" {
-			title += fmt.Sprintf("  type=%s", entityType)
-		}
-		if entityOwner != "" {
-			title += fmt.Sprintf("  owner=%s", entityOwner)
-		}
 		_, err = tui.RunTable(tui.TableConfig{
-			Title:   title,
+			Title:   entitiesTableTitle(len(entities), entityType, entityOwner, spinErr != nil),
 			Columns: tuiCols,
 			Rows:    tuiRows,
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		return spinErr
 	}
 
 	ui.RenderTable(colNames, rows)
-	return nil
+	return spinErr
+}
+
+// entitiesTableTitle builds the interactive table's title, marking it incomplete when the fetch errored.
+func entitiesTableTitle(count int, entityType, entityOwner string, incomplete bool) string {
+	title := fmt.Sprintf("Entities  (%d)", count)
+	if entityType != "" {
+		title += fmt.Sprintf("  type=%s", entityType)
+	}
+	if entityOwner != "" {
+		title += fmt.Sprintf("  owner=%s", entityOwner)
+	}
+	if incomplete {
+		title += "  (incomplete)"
+	}
+	return title
 }
 
 // entityTable returns the headers and rows for an entity listing.
@@ -157,7 +185,7 @@ func runGetEntity(cmd *cobra.Command, args []string) error {
 		if api.IsNotFound(spinErr) {
 			return fmt.Errorf("entity %q not found.\nHint: Use the ID column from `shoehorn get entities` to look up an entity by its service ID", id)
 		}
-		return fmt.Errorf("get entity: %w", spinErr)
+		return spinErr
 	}
 
 	entity := result.(*api.EntityDetail)
@@ -194,7 +222,7 @@ func runGetEntity(cmd *cobra.Command, args []string) error {
 		r, err := client.GetEntityResources(ctx, entity.ID)
 		if err != nil {
 			mu.Lock()
-			errs = append(errs, fmt.Sprintf("get entity resources: %v", err))
+			errs = append(errs, err.Error())
 			mu.Unlock()
 			return
 		}
@@ -205,7 +233,7 @@ func runGetEntity(cmd *cobra.Command, args []string) error {
 		s, err := client.GetEntityStatus(ctx, entity.ID)
 		if err != nil {
 			mu.Lock()
-			errs = append(errs, fmt.Sprintf("get entity status: %v", err))
+			errs = append(errs, err.Error())
 			mu.Unlock()
 			return
 		}
@@ -218,7 +246,7 @@ func runGetEntity(cmd *cobra.Command, args []string) error {
 			sc, err := client.GetEntityScorecard(ctx, entity.ID)
 			if err != nil {
 				mu.Lock()
-				errs = append(errs, fmt.Sprintf("get entity scorecard: %v", err))
+				errs = append(errs, err.Error())
 				mu.Unlock()
 				return
 			}
@@ -227,6 +255,10 @@ func runGetEntity(cmd *cobra.Command, args []string) error {
 	}
 
 	wg.Wait()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if len(errs) > 0 {
 		fmt.Fprintln(os.Stderr, "Warning: some details could not be loaded:")
