@@ -1,7 +1,10 @@
 package commands
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/shoehorn-dev/shoehorn-cli/pkg/api"
@@ -111,6 +114,10 @@ func runSearch(cmd *cobra.Command, args []string) error {
 						return client.GetEntity(ctx, h.ID)
 					})
 					if eErr != nil {
+						if errors.Is(eErr, context.Canceled) {
+							return eErr
+						}
+						fmt.Fprintf(os.Stderr, "Warning: couldn't load full details: %v\n", eErr)
 						// Fallback to search hit data
 						fmt.Println(tui.RenderDetail(h.Name, []tui.DetailSection{
 							{

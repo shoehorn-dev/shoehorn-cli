@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync/atomic"
@@ -10,6 +12,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
+
+// ErrCancelled matches context.Canceled so cancellation reports the same way in TTY and plain mode.
+var ErrCancelled = fmt.Errorf("cancelled: %w", context.Canceled)
 
 // plainMode disables TUI spinners and renders plain output instead.
 // Uses atomic.Bool for safe concurrent access.
@@ -72,6 +77,8 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.done = true
+			m.err = ErrCancelled
 			return m, tea.Quit
 		}
 	case spinner.TickMsg:
@@ -100,12 +107,23 @@ func RunSpinner(message string, fn func() (any, error)) (any, error) {
 	m := newSpinnerModel(message, fn)
 	p := tea.NewProgram(m)
 	final, err := p.Run()
+	return interpretSpinnerResult(final, err)
+}
+
+// interpretSpinnerResult maps a real SIGINT or other terminating signal to ErrCancelled instead of a silent (nil, nil).
+func interpretSpinnerResult(final tea.Model, err error) (any, error) {
 	if err != nil {
+		if errors.Is(err, tea.ErrInterrupted) {
+			return nil, ErrCancelled
+		}
 		return nil, fmt.Errorf("spinner: %w", err)
 	}
 	fm, ok := final.(spinnerModel)
 	if !ok {
 		return nil, fmt.Errorf("spinner: unexpected final model type %T", final)
+	}
+	if !fm.done {
+		return nil, ErrCancelled
 	}
 	return fm.result, fm.err
 }

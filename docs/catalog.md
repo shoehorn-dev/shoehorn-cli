@@ -32,6 +32,8 @@ shoehorn get entities --output json
 Flags:
 - `--type` — filter by entity type (service, library, website, etc.)
 - `--owner` — filter by owning team slug
+- `--include-end-of-life` - include tombstoned entities, with a Lifecycle column
+- `--limit` - stop after this many entities (0 fetches all)
 
 ## `get entity`
 

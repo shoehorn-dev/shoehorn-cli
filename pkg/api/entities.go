@@ -112,7 +112,7 @@ type Entity struct {
 	Description string   `json:"description"`
 	Tags        []string `json:"tags"`
 	TenantID    string   `json:"tenant_id"`
-	Lifecycle   string   `json:"lifecycle,omitempty"`
+	Lifecycle   string   `json:"lifecycle"`
 }
 
 // EntityDetail represents full entity detail with all sub-resources
@@ -163,6 +163,8 @@ type ListEntitiesOpts struct {
 	Search           string
 	Owner            string
 	IncludeEndOfLife bool
+	// Limit stops the walk after this many entities (0 = unlimited); negative is invalid.
+	Limit int
 }
 
 // entityOwnerRef matches the API owner array element: [{"id":"team-slug","type":"team"}]
@@ -215,7 +217,7 @@ func parseOwner(raw json.RawMessage) string {
 	return ""
 }
 
-// ListEntities returns all entities matching the given filters (handles pagination)
+// ListEntities follows the server's cursor to opts.Limit or the end; on error the slice holds whatever was fetched, never nil.
 func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*Entity, error) {
 	q := url.Values{}
 	if opts.Type != "" {
@@ -230,14 +232,18 @@ func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*En
 	if opts.IncludeEndOfLife {
 		q.Set("includeEndOfLife", "true")
 	}
-	q.Set("limit", strconv.Itoa(entitiesPageSize))
+	pageSize := entitiesPageSize
+	if opts.Limit > 0 && opts.Limit < pageSize {
+		pageSize = opts.Limit
+	}
+	q.Set("limit", strconv.Itoa(pageSize))
 
-	var entities []*Entity
+	entities := make([]*Entity, 0, entitiesPageSize)
 	seen := map[string]bool{}
 	for range maxEntityPages {
 		var resp entitiesAPIResponse
 		if err := c.Get(ctx, "/api/v1/entities?"+q.Encode(), &resp); err != nil {
-			return nil, fmt.Errorf("list entities: %w", err)
+			return entities, fmt.Errorf("list entities: failed after %d entities, list is incomplete: %w", len(entities), err)
 		}
 		for _, raw := range resp.Entities {
 			entities = append(entities, &Entity{
@@ -250,6 +256,9 @@ func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*En
 				Tags:        raw.Tags,
 				Lifecycle:   raw.Lifecycle,
 			})
+			if opts.Limit > 0 && len(entities) >= opts.Limit {
+				return entities[:opts.Limit], nil
+			}
 		}
 
 		next := resp.Page.NextCursor
@@ -257,12 +266,12 @@ func (c *Client) ListEntities(ctx context.Context, opts ListEntitiesOpts) ([]*En
 			return entities, nil
 		}
 		if seen[next] {
-			return nil, fmt.Errorf("list entities: the server returned cursor %q twice after %d entities", next, len(entities))
+			return entities, fmt.Errorf("list entities: the server returned cursor %q twice after %d entities", next, len(entities))
 		}
 		seen[next] = true
 		q.Set("cursor", next)
 	}
-	return nil, fmt.Errorf("list entities: stopped after %d pages (%d entities); narrow the list with --type or --owner", maxEntityPages, len(entities))
+	return entities, fmt.Errorf("list entities: stopped after %d pages (%d entities); narrow the list with --type, --owner, or --limit", maxEntityPages, len(entities))
 }
 
 // entitiesPageSize is the most the entities endpoint returns per request.
