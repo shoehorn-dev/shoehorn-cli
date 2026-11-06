@@ -22,6 +22,17 @@ const defaultSearchLimit = 20
 
 var searchLimit = defaultSearchLimit
 
+// displayType returns the entity's specific type (a k8s kind such as
+// StatefulSet, or api/database/library/etc.) when the search result carries
+// one, falling back to the generic category ("entity", "doc", "repository",
+// etc.) otherwise. See shoehorn-dev/shoehorn-cli#52.
+func displayType(h api.SearchHit) string {
+	if h.EntityType != "" {
+		return h.EntityType
+	}
+	return h.Type
+}
+
 func init() {
 	searchCmd.Flags().IntVar(&searchLimit, "limit", defaultSearchLimit, "maximum number of results (1-100)")
 	rootCmd.AddCommand(searchCmd)
@@ -68,7 +79,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		if len(desc) > 60 {
 			desc = desc[:60] + "…"
 		}
-		rows[i] = []string{h.Name, h.Type, h.Owner, desc}
+		rows[i] = []string{h.Name, displayType(h), h.Owner, desc}
 	}
 
 	if mode == ui.ModeInteractive {
@@ -105,7 +116,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 							{
 								Fields: []tui.Field{
 									{Label: "ID", Value: h.ID},
-									{Label: "Type", Value: h.Type},
+									{Label: "Type", Value: displayType(h)},
 									{Label: "Owner", Value: h.Owner},
 									{Label: "Description", Value: h.Description},
 								},

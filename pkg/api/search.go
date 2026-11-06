@@ -15,6 +15,11 @@ type SearchHit struct {
 	Description string  `json:"description"`
 	Owner       string  `json:"owner"`
 	Score       float64 `json:"score"`
+	// EntityType is the entity's own type (a k8s kind such as StatefulSet or
+	// Deployment, or api/database/library/etc. for non-k8s entities), distinct
+	// from Type, which is always the search category ("entity") here. Only set
+	// for catalog entity hits.
+	EntityType string `json:"entity_type,omitempty"`
 }
 
 // SearchResult wraps search hits
@@ -30,6 +35,7 @@ type searchAPIResult struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Score       float64 `json:"score"`
+	EntityType  string  `json:"entity_type"`
 }
 
 // searchAPIResponse matches the actual API response for /search
@@ -58,6 +64,7 @@ func (c *Client) Search(ctx context.Context, query string, limit int) (*SearchRe
 			Type:        r.Type,
 			Description: r.Description,
 			Score:       r.Score,
+			EntityType:  r.EntityType,
 		}
 	}
 
