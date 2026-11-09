@@ -33,6 +33,39 @@ shoehorn addon enable my-addon
 shoehorn addon disable my-addon
 ```
 
+## `addon reload`
+
+Re-push every enabled addon for the current tenant into the runtime. Use
+this if an addon shows status `not_loaded` after an API restart or upgrade
+-- the server doesn't always resume every installed addon on its own.
+
+```bash
+shoehorn addon reload
+```
+
+## `addon config`
+
+View or update an addon's configuration from the command line instead of
+the admin UI. With no flags, prints the current config. `--set` and
+`--file` merge into the existing config rather than replacing it.
+
+```bash
+shoehorn addon config my-addon
+shoehorn addon config my-addon --set api_url=https://api.example.com --set sync_mode=full
+shoehorn addon config my-addon --file config.json
+```
+
+## `addon secret`
+
+Set, list, or delete an addon's secret values (API tokens, credentials).
+Values are never returned once set -- only key names can be listed.
+
+```bash
+shoehorn addon secret set my-addon api_token s3cr3t
+shoehorn addon secret list my-addon
+shoehorn addon secret delete my-addon api_token
+```
+
 ## `addon logs`
 
 View recent logs for an addon.
