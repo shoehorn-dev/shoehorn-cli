@@ -127,6 +127,24 @@ func (c *Client) DisableAddon(ctx context.Context, slug string) error {
 	return nil
 }
 
+// ReloadResult summarizes a bulk addon reload.
+type ReloadResult struct {
+	Reloaded []string          `json:"reloaded"`
+	Failed   map[string]string `json:"failed,omitempty"`
+}
+
+// ReloadAddons re-pushes every enabled addon installation for the current
+// tenant into the runtime. This is the recovery action for when the
+// runtime's view of a tenant's addons has gone stale relative to the
+// database -- most notably after an API restart.
+func (c *Client) ReloadAddons(ctx context.Context) (*ReloadResult, error) {
+	var result ReloadResult
+	if err := c.Post(ctx, "/api/v1/marketplace/reload", nil, &result); err != nil {
+		return nil, fmt.Errorf("reload addons: %w", err)
+	}
+	return &result, nil
+}
+
 // GetAddonLogs returns recent log entries for an addon.
 func (c *Client) GetAddonLogs(ctx context.Context, slug string, limit int) ([]*AddonLogEntry, error) {
 	if limit <= 0 {
@@ -253,4 +271,67 @@ type PublishResult struct {
 type BundleUploadResult struct {
 	Slug     string         `json:"slug"`
 	Uploaded map[string]int `json:"uploaded"`
+}
+
+// InstallationDetail represents an installed addon's installation record,
+// including its current config.
+type InstallationDetail struct {
+	ItemSlug string          `json:"itemSlug"`
+	Enabled  bool            `json:"enabled"`
+	Config   json.RawMessage `json:"config"`
+}
+
+// GetAddonInstallation returns the full installation record for an addon,
+// including its current config -- used to merge new config keys in
+// without clobbering the ones already set (UpdateAddonConfig replaces the
+// whole config object, it does not merge).
+func (c *Client) GetAddonInstallation(ctx context.Context, slug string) (*InstallationDetail, error) {
+	var inst InstallationDetail
+	if err := c.Get(ctx, fmt.Sprintf("/api/v1/marketplace/installed/%s", url.PathEscape(slug)), &inst); err != nil {
+		return nil, fmt.Errorf("get addon installation: %w", err)
+	}
+	return &inst, nil
+}
+
+// UpdateAddonConfig replaces an installed addon's config and pushes the new
+// config into the already-running addon instance. This is a full overwrite
+// of the stored config, not a merge of individual keys -- callers that want
+// to change only some keys should read the current config first
+// (GetAddonInstallation) and merge locally.
+func (c *Client) UpdateAddonConfig(ctx context.Context, slug string, config json.RawMessage) error {
+	body := map[string]json.RawMessage{"config": config}
+	if err := c.Put(ctx, fmt.Sprintf("/api/v1/marketplace/%s/config", url.PathEscape(slug)), body, nil); err != nil {
+		return fmt.Errorf("update addon config: %w", err)
+	}
+	return nil
+}
+
+// SetAddonSecret sets or updates one encrypted secret value for an addon.
+// Secrets are stored one at a time; there is no batch-set endpoint.
+func (c *Client) SetAddonSecret(ctx context.Context, slug, key, value string) error {
+	body := map[string]string{"key": key, "value": value}
+	if err := c.Put(ctx, fmt.Sprintf("/api/v1/admin/addons/%s/secrets", url.PathEscape(slug)), body, nil); err != nil {
+		return fmt.Errorf("set addon secret %q: %w", key, err)
+	}
+	return nil
+}
+
+// ListAddonSecretKeys returns the names (never the values) of an addon's
+// stored secrets.
+func (c *Client) ListAddonSecretKeys(ctx context.Context, slug string) ([]string, error) {
+	var resp struct {
+		Keys []string `json:"keys"`
+	}
+	if err := c.Get(ctx, fmt.Sprintf("/api/v1/admin/addons/%s/secrets", url.PathEscape(slug)), &resp); err != nil {
+		return nil, fmt.Errorf("list addon secrets: %w", err)
+	}
+	return resp.Keys, nil
+}
+
+// DeleteAddonSecret removes one stored secret value for an addon.
+func (c *Client) DeleteAddonSecret(ctx context.Context, slug, key string) error {
+	if err := c.Delete(ctx, fmt.Sprintf("/api/v1/admin/addons/%s/secrets/%s", url.PathEscape(slug), url.PathEscape(key))); err != nil {
+		return fmt.Errorf("delete addon secret %q: %w", key, err)
+	}
+	return nil
 }

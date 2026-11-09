@@ -273,6 +273,55 @@ func runAddonDisable(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// ─── addon reload ───────────────────────────────────────────────────────────
+
+var addonReloadCmd = &cobra.Command{
+	Use:   "reload",
+	Short: "Re-push every enabled addon into the runtime",
+	Long: `Re-pushes every enabled addon installation for the current tenant into
+the runtime. This is the recovery action for when an addon shows status
+"not_loaded" after an API restart -- the server doesn't always resume every
+installed addon on its own; this fixes all of them in one call instead of
+looking up and running "addon enable" on each slug by hand.`,
+	RunE: runAddonReload,
+}
+
+func runAddonReload(cmd *cobra.Command, _ []string) error {
+	client, err := api.NewClientFromConfig(api.WithLogger(Logger))
+	if err != nil {
+		return err
+	}
+
+	result, spinErr := tui.RunSpinner("Reloading addons...", func() (any, error) {
+		return client.ReloadAddons(cmd.Context())
+	})
+	if spinErr != nil {
+		return fmt.Errorf("reload addons: %w", spinErr)
+	}
+
+	reload := result.(*api.ReloadResult)
+
+	mode := ui.DetectMode(Interactive(), NoInteractive(), OutputFormat())
+	if mode == ui.ModeJSON {
+		return ui.RenderJSON(reload)
+	}
+	if mode == ui.ModeYAML {
+		return ui.RenderYAML(reload)
+	}
+
+	if len(reload.Reloaded) == 0 && len(reload.Failed) == 0 {
+		fmt.Println("No enabled addons to reload.")
+		return nil
+	}
+	for _, slug := range reload.Reloaded {
+		fmt.Printf("  %s reloaded.\n", slug)
+	}
+	for slug, reason := range reload.Failed {
+		fmt.Printf("  %s failed: %s\n", slug, tui.ErrorStyle.Render(reason))
+	}
+	return nil
+}
+
 // ─── addon logs ─────────────────────────────────────────────────────────────
 
 var addonLogsLimit int
@@ -397,6 +446,7 @@ func init() {
 	addonCmd.AddCommand(addonUninstallCmd)
 	addonCmd.AddCommand(addonEnableCmd)
 	addonCmd.AddCommand(addonDisableCmd)
+	addonCmd.AddCommand(addonReloadCmd)
 	addonCmd.AddCommand(addonLogsCmd)
 	addonCmd.AddCommand(addonBrowseCmd)
 

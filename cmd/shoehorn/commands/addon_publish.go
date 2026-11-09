@@ -122,6 +122,24 @@ func runAddonPublish(cmd *cobra.Command, _ []string) error {
 		for name, size := range upload.Uploaded {
 			fmt.Printf("  Bundle %s: %d bytes uploaded\n", name, size)
 		}
+
+		// On a first-ever publish, the server auto-installs the addon as
+		// part of step 1 above -- before any bundle exists, since bundles
+		// only arrive here in step 2. That install's attempt to load the
+		// addon into the runtime always fails for exactly this reason
+		// (confirmed live: "no backend bundle uploaded"), and the server
+		// swallows that failure rather than rejecting the install, leaving
+		// a row that *looks* installed but was never actually loaded.
+		// Enable is safe to call unconditionally here (idempotent, retries
+		// the load with the bundle now in place) and is cheap compared to
+		// the alternative of asking the user to disable/re-enable by hand.
+		if pub.Created {
+			if _, enableErr := tui.RunSpinner("Loading addon into the runtime...", func() (any, error) {
+				return nil, client.EnableAddon(cmd.Context(), pub.Slug)
+			}); enableErr != nil {
+				return fmt.Errorf("load addon after bundle upload: %w", enableErr)
+			}
+		}
 	}
 
 	return nil
