@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/shoehorn-dev/shoehorn-cli/pkg/config"
 	"go.uber.org/zap"
@@ -208,15 +209,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, result a
 
 	// Handle non-2xx status codes
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var errResp ErrorResponse
-		if err := json.Unmarshal(respBody, &errResp); err != nil {
-			body := string(respBody)
-			if len(body) > 200 {
-				body = body[:200] + "... (truncated)"
-			}
-			return NewAPIError(resp.StatusCode, body, "")
-		}
-		return NewAPIError(resp.StatusCode, errResp.Error.Message, errResp.Error.Code)
+		return parseAPIError(resp.StatusCode, respBody)
 	}
 
 	// Decode success response
@@ -346,6 +339,62 @@ type ErrorResponse struct {
 		Message string `json:"message"`
 		Code    string `json:"code,omitempty"`
 	} `json:"error"`
+}
+
+// flatErrorResponse is the envelope the API's auth middleware answers with.
+type flatErrorResponse struct {
+	Error   string `json:"error"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+const (
+	maxServerMessage = 500
+	maxServerCode    = 64
+	maxRawBody       = 200
+)
+
+// parseAPIError reads either error envelope the API sends, falling back to the raw body.
+// Every server string is cleaned before it can reach a terminal.
+func parseAPIError(status int, body []byte) *APIError {
+	var nested ErrorResponse
+	if err := json.Unmarshal(body, &nested); err == nil && (nested.Error.Message != "" || nested.Error.Code != "") {
+		return NewAPIError(status, cleanServerText(nested.Error.Message, maxServerMessage), cleanServerText(nested.Error.Code, maxServerCode))
+	}
+	var flat flatErrorResponse
+	if err := json.Unmarshal(body, &flat); err == nil {
+		message := flat.Message
+		if message == "" {
+			message = flat.Error
+		}
+		if message != "" || flat.Code != "" {
+			return NewAPIError(status, cleanServerText(message, maxServerMessage), cleanServerText(flat.Code, maxServerCode))
+		}
+	}
+	return NewAPIError(status, cleanServerText(string(body), maxRawBody), "")
+}
+
+// cleanServerText keeps server text to one plain line: newlines and tabs become
+// spaces, and control, invisible-format (bidi overrides) and line-separator
+// characters are dropped so the text cannot drive or rearrange the terminal.
+// It caps the result at maxRunes.
+func cleanServerText(s string, maxRunes int) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range s {
+		if r == '\n' || r == '\t' {
+			r = ' '
+		} else if unicode.IsControl(r) || unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp) {
+			continue
+		}
+		if n == maxRunes {
+			b.WriteString("... (truncated)")
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
 }
 
 // isRetryable returns true if the error is a transient failure worth retrying.
