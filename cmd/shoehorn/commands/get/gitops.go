@@ -16,6 +16,7 @@ var (
 	gitopsTool         string
 	gitopsSyncStatus   string
 	gitopsHealthStatus string
+	gitopsNoWorkloads  bool
 )
 
 var gitopsCmd = &cobra.Command{
@@ -34,6 +35,7 @@ func init() {
 	gitopsCmd.Flags().StringVar(&gitopsTool, "tool", "", "filter by tool (argocd, fluxcd)")
 	gitopsCmd.Flags().StringVar(&gitopsSyncStatus, "sync-status", "", "filter by sync status")
 	gitopsCmd.Flags().StringVar(&gitopsHealthStatus, "health-status", "", "filter by health status")
+	gitopsCmd.Flags().BoolVar(&gitopsNoWorkloads, "without-workloads", false, "list only apps with no workloads in Shoehorn, with the reason")
 
 	GetCmd.AddCommand(gitopsCmd)
 }
@@ -60,6 +62,9 @@ func runGetGitOpsList(cmd *cobra.Command) error {
 		SyncStatus:   gitopsSyncStatus,
 		HealthStatus: gitopsHealthStatus,
 	}
+	if gitopsNoWorkloads {
+		opts.Workloads = "none"
+	}
 
 	result, spinErr := tui.RunSpinner("Loading GitOps resources...", func() (any, error) {
 		return client.ListGitOpsResources(cmd.Context(), opts)
@@ -72,23 +77,7 @@ func runGetGitOpsList(cmd *cobra.Command) error {
 
 	mode := ui.DetectMode(commands.Interactive(), commands.NoInteractive(), commands.OutputFormat())
 
-	rows := make([][]string, len(resources))
-	for i, r := range resources {
-		lastSync := r.LastSyncedAt
-		if lastSync == "" {
-			lastSync = "-"
-		}
-		rows[i] = []string{
-			r.ClusterID,
-			r.Name,
-			r.Namespace,
-			r.Tool,
-			r.Kind,
-			r.SyncStatus,
-			r.HealthStatus,
-			lastSync,
-		}
-	}
+	columns, rows := gitopsListTable(resources, gitopsNoWorkloads)
 
 	if mode == ui.ModeInteractive {
 		tuiCols := []table.Column{
@@ -101,18 +90,15 @@ func runGetGitOpsList(cmd *cobra.Command) error {
 			{Title: "Health Status", Width: 14},
 			{Title: "Last Sync", Width: 20},
 		}
+		if gitopsNoWorkloads {
+			tuiCols = append(tuiCols, table.Column{Title: "Reason", Width: 28})
+		}
 		tuiRows := make([]table.Row, len(resources))
 		for j, r := range resources {
-			lastSync := r.LastSyncedAt
-			if lastSync == "" {
-				lastSync = "-"
-			}
-			syncStatus := tui.StatusColor(r.SyncStatus).Render(r.SyncStatus)
-			healthStatus := tui.StatusColor(r.HealthStatus).Render(r.HealthStatus)
-			tuiRows[j] = table.Row{
-				r.ClusterID, r.Name, r.Namespace, r.Tool, r.Kind,
-				syncStatus, healthStatus, lastSync,
-			}
+			row := append(table.Row(nil), rows[j]...)
+			row[5] = tui.StatusColor(r.SyncStatus).Render(r.SyncStatus)
+			row[6] = tui.StatusColor(r.HealthStatus).Render(r.HealthStatus)
+			tuiRows[j] = row
 		}
 		title := fmt.Sprintf("GitOps Resources  (%d)", len(resources))
 		if gitopsTool != "" {
@@ -130,10 +116,48 @@ func runGetGitOpsList(cmd *cobra.Command) error {
 	}
 
 	return ui.RenderListResult(mode, resources, ui.ListConfig{
-		Columns:  []string{"Cluster", "Name", "Namespace", "Tool", "Kind", "Sync Status", "Health Status", "Last Sync"},
+		Columns:  columns,
 		Rows:     rows,
 		EmptyMsg: "No GitOps resources found",
 	})
+}
+
+// gitopsListTable builds the list columns and rows. withReason adds a Reason
+// column for `--without-workloads`.
+func gitopsListTable(resources []*api.GitOpsResource, withReason bool) ([]string, [][]string) {
+	columns := []string{"Cluster", "Name", "Namespace", "Tool", "Kind", "Sync Status", "Health Status", "Last Sync"}
+	if withReason {
+		columns = append(columns, "Reason")
+	}
+	rows := make([][]string, len(resources))
+	for i, r := range resources {
+		row := []string{
+			r.ClusterID,
+			r.Name,
+			r.Namespace,
+			r.Tool,
+			r.Kind,
+			r.SyncStatus,
+			r.HealthStatus,
+			dashIfEmpty(r.LastSyncedAt),
+		}
+		if withReason {
+			reason := ""
+			if r.NoWorkloads != nil {
+				reason = r.NoWorkloads.Reason
+			}
+			row = append(row, dashIfEmpty(reason))
+		}
+		rows[i] = row
+	}
+	return columns, rows
+}
+
+func dashIfEmpty(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 func runGetGitOpsDetail(cmd *cobra.Command, id string) error {
