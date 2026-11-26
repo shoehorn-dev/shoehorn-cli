@@ -156,8 +156,11 @@ List GitOps resources (ArgoCD Applications, FluxCD Kustomizations) or get detail
 shoehorn get gitops
 shoehorn get gitops --tool argocd --cluster-id prod-us-east-1
 shoehorn get gitops --sync-status OutOfSync
+shoehorn get gitops --without-workloads
 shoehorn get gitops <id>
 shoehorn get gitops <id> --output json
 ```
 
-Flags: `--cluster-id`, `--tool` (argocd/fluxcd), `--sync-status`, `--health-status`
+Flags: `--cluster-id`, `--tool` (argocd/fluxcd), `--sync-status`, `--health-status`, `--without-workloads`
+
+`--without-workloads` lists only apps that have no workloads in Shoehorn and adds a Reason column: `not_deployed`, `outside_watched_namespaces`, `no_workloads_listed`, `unsupported_kinds`, `contents_unknown` or `agent_outdated`. With `--output json` the full reason is under `no_workloads`, including the missing workloads.

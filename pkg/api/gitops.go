@@ -23,6 +23,27 @@ type GitOpsResource struct {
 	EntityName   string `json:"entity_name,omitempty"`
 	OwnerTeam    string `json:"owner_team,omitempty"`
 	LastSyncedAt string `json:"last_synced_at,omitempty"`
+	// NoWorkloads says why the app has no workloads. Only set when listing
+	// with Workloads "none".
+	NoWorkloads *GitOpsNoWorkloads `json:"no_workloads,omitempty"`
+}
+
+// GitOpsNoWorkloads explains why a GitOps app has no workloads in Shoehorn.
+// Reason is one of agent_outdated, contents_unknown, no_workloads_listed,
+// unsupported_kinds, not_deployed, outside_watched_namespaces.
+type GitOpsNoWorkloads struct {
+	Reason       string                  `json:"reason"`
+	Missing      []GitOpsMissingWorkload `json:"missing"`
+	MissingTotal int                     `json:"missing_total"`
+	Kinds        []string                `json:"kinds"`
+	Namespace    string                  `json:"namespace"`
+}
+
+// GitOpsMissingWorkload is a workload an app lists that Shoehorn doesn't have.
+type GitOpsMissingWorkload struct {
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 // ListGitOpsResourcesOpts holds optional filters for listing GitOps resources.
@@ -31,6 +52,9 @@ type ListGitOpsResourcesOpts struct {
 	Tool         string
 	SyncStatus   string
 	HealthStatus string
+	// Workloads "none" lists only apps that no workload links to, each with
+	// its reason.
+	Workloads string
 }
 
 // ─── GitOps API Methods ──────────────────────────────────────────────────────
@@ -49,6 +73,9 @@ func (c *Client) ListGitOpsResources(ctx context.Context, opts ListGitOpsResourc
 	}
 	if opts.HealthStatus != "" {
 		q.Set("health_status", opts.HealthStatus)
+	}
+	if opts.Workloads != "" {
+		q.Set("workloads", opts.Workloads)
 	}
 
 	path := "/api/v1/operations/gitops"
